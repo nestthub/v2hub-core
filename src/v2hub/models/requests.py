@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+from typing import Annotated
+
+from pydantic import Field, field_validator, model_validator
+
+from .base import BaseModelConfig
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Request Models
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class SubscriptionCreateRequest(BaseModelConfig):
+    """Request to create a new subscription."""
+
+    name: Annotated[str, Field(description="Subscription name", min_length=1, max_length=64)]
+    description: Annotated[
+        str | None, Field(None, description="Optional description", max_length=255)
+    ] = None
+    sources: Annotated[list[str], Field([], description="Initial sources")] = []
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate subscription name."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Subscription name cannot be empty")
+        return v
+
+    @field_validator("sources")
+    @classmethod
+    def validate_sources(cls, v: list[str] | None) -> list[str] | None:
+        """Validate sources list."""
+        if v is not None:
+            # Remove empty strings and duplicates
+            v = list(dict.fromkeys([s.strip() for s in v if s.strip()]))
+            if not v:
+                return None
+        return v
+
+
+class SubscriptionUpdateRequest(BaseModelConfig):
+    name: Annotated[str | None, Field(None, description="New name", min_length=1, max_length=64)] = None
+    description: Annotated[str | None, Field(None, description="New description", max_length=64)] = None
+
+    @model_validator(mode="after")
+    def validate_at_least_one_field(self) -> "SubscriptionUpdateRequest":
+        """Ensure at least one field is provided."""
+        if self.name is None and self.description is None:
+            raise ValueError("At least one field must be provided for update")
+        return self
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        """Validate subscription name."""
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("Subscription name cannot be empty")
+        return v
+
+
+
+
+class SourceAddRequest(BaseModelConfig):
+    """Request to add sources to subscription."""
+
+    sources: Annotated[list[str], Field(description="Sources to add", min_length=1)]
+
+    @field_validator("sources")
+    @classmethod
+    def validate_sources(cls, v: list[str]) -> list[str]:
+        """Validate and deduplicate sources."""
+        v = [s.strip() for s in v if s.strip()]
+        if not v:
+            raise ValueError("At least one valid source must be provided")
+        # Remove duplicates while preserving order
+        return list(dict.fromkeys(v))
+
+
+class SourceReplaceRequest(BaseModelConfig):
+    """Request to replace all sources in subscription."""
+
+    sources: Annotated[list[str], Field(description="New sources (replaces all)")]
+
+    @field_validator("sources")
+    @classmethod
+    def validate_sources(cls, v: list[str]) -> list[str]:
+        """Validate and deduplicate sources."""
+        v = [s.strip() for s in v if s.strip()]
+        # Remove duplicates while preserving order
+        return list(dict.fromkeys(v))
+
+
+class SourceRemoveRequest(BaseModelConfig):
+    """Request to remove specific sources."""
+
+    source_ids: Annotated[list[str], Field(description="Source IDs to remove", min_length=1)]
+
+    @field_validator("source_ids")
+    @classmethod
+    def validate_source_ids(cls, v: list[str]) -> list[str]:
+        """Validate and deduplicate source IDs."""
+        v = [s.strip() for s in v if s.strip()]
+        if not v:
+            raise ValueError("At least one valid source ID must be provided")
+        return list(dict.fromkeys(v))
+
+
+class CommentUpdateRequest(BaseModelConfig):
+    """Request to update config comment."""
+
+    config_id: Annotated[str, Field(description="Config id", min_length=1)]
+    comment: Annotated[str | None, Field(None, description="Comment text", max_length=255)]
