@@ -6,8 +6,11 @@ Production-grade async client with comprehensive features.
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Any
+
+from v2hub.core.exceptions import VPNAPIError
 
 from .core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, with_async_retry
 from .http.client import HTTPClient
@@ -417,20 +420,27 @@ class AsyncVPNClient:
 
     @with_async_retry()
     async def get_public_subscription(self, token: str) -> PublicSubscriptionResponse:
-        """
-        Get public subscription configs (base64 encoded).
-
-        This endpoint does not require authentication.
-
-        Args:
-            token: Subscription token
-
-        Returns:
-            Base64-encoded subscription content
-
-        Raises:
-            SubscriptionNotFoundError: Subscription not found
-            VPNAPIError: Other API errors
-        """
-        response = await self._http_client.get(f"/api/v1/public/subs/{token}")
-        return PublicSubscriptionResponse(**response.json())
+        response = await self._http_client.get(f"/sub/{token}")
+    
+        if response.status_code != 200:
+            raise VPNAPIError(f"HTTP {response.status_code}: {response.text}")
+    
+        # --- content (оставляем как есть, base64) ---
+        content_b64 = response.text.strip()
+    
+        # --- title (декодируем, потому что модель хранит уже нормальную строку) ---
+        title = "v2hub"
+        title_header = response.headers.get("profile-title")
+    
+        if title_header and title_header.startswith("base64:"):
+            try:
+                encoded = title_header.split("base64:")[1]
+                title = base64.b64decode(encoded).decode("utf-8")
+            except Exception:
+                # fallback — не валим всё из-за кривого заголовка
+                pass
+    
+        return PublicSubscriptionResponse(
+            title=title,
+            content=content_b64,
+        )
