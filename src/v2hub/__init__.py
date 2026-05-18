@@ -22,11 +22,13 @@ Example (Sync):
 
 from __future__ import annotations
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "nestt"
+__api_version__ = "v1"
 __all__ = [
     # Version
     "__version__",
+    "__api_version__",
     # Clients
     "AsyncVPNClient",
     "VPNClient",

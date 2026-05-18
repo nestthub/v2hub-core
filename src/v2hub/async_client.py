@@ -27,6 +27,8 @@ from .models import (
     SubscriptionUpdateRequest,
 )
 
+from . import __api_version__
+
 logger = logging.getLogger(__name__)
 
 __all__ = ["AsyncVPNClient"]
@@ -135,7 +137,7 @@ class AsyncVPNClient:
             for sub in subs:
                 print(f"{sub.name}: {sub.sources_count} configs")
         """
-        response = await self._http_client.get("/api/v1/subs")
+        response = await self._http_client.get(f"/api/{__api_version__}/subs")
         data = response.json()
         return [SubscriptionListItem(**item) for item in data]
 
@@ -176,7 +178,7 @@ class AsyncVPNClient:
             sources=sources,
         )
         response = await self._http_client.post(
-            "/api/v1/subs",
+            f"/api/{__api_version__}/subs",
             json=request.model_dump(mode="json", exclude_none=True),
         )
         return Subscription(**response.json())
@@ -197,7 +199,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        response = await self._http_client.get(f"/api/v1/subs/{token}")
+        response = await self._http_client.get(f"/api/{__api_version__}/subs/{token}")
         return Subscription(**response.json())
 
     @with_async_retry()
@@ -216,7 +218,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        response = await self._http_client.get(f"/api/v1/subs/by-name/{name}")
+        response = await self._http_client.get(f"/api/{__api_version__}/subs/by-name/{name}")
         return Subscription(**response.json())
 
     @with_async_retry()
@@ -246,7 +248,7 @@ class AsyncVPNClient:
         """
         request = SubscriptionUpdateRequest(name=name, description=description)
         response = await self._http_client.patch(
-            f"/api/v1/subs/{token}",
+            f"/api/{__api_version__}/subs/{token}",
             json=request.model_dump(mode="json", exclude_none=True),
         )
         return Subscription(**response.json())
@@ -264,7 +266,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        await self._http_client.delete(f"/api/v1/subs/{token}")
+        await self._http_client.delete(f"/api/{__api_version__}/subs/{token}")
 
     # ═══════════════════════════════════════════════════════════════════════
     # Source Management
@@ -295,7 +297,7 @@ class AsyncVPNClient:
         """
         request = SourceAddRequest(sources=sources)
         response = await self._http_client.post(
-            f"/api/v1/subs/{token}/sources",
+            f"/api/{__api_version__}/subs/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -325,7 +327,7 @@ class AsyncVPNClient:
         """
         request = SourceReplaceRequest(sources=sources)
         response = await self._http_client.put(
-            f"/api/v1/subs/{token}/sources",
+            f"/api/{__api_version__}/subs/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -356,7 +358,7 @@ class AsyncVPNClient:
         request = SourceRemoveRequest(source_ids=source_ids)
         response = await self._http_client.request(
             "DELETE",
-            f"/api/v1/subs/{token}/sources",
+            f"/api/{__api_version__}/subs/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -387,7 +389,7 @@ class AsyncVPNClient:
         """
         request = CommentUpdateRequest(config_id=config_id, comment=comment)
         response = await self._http_client.patch(
-            f"/api/v1/subs/{token}/comments",
+            f"/api/{__api_version__}/subs/{token}/comments",
             json=request.model_dump(mode="json", exclude_none=True),
         )
 
@@ -411,7 +413,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        response = await self._http_client.post(f"/api/v1/subs/{token}/refresh")
+        response = await self._http_client.post(f"/api/{__api_version__}/subs/{token}/refresh")
         return RefreshSubscriptionResponse(**response.json())
 
     # ═══════════════════════════════════════════════════════════════════════
