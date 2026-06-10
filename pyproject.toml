@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "v2hub"
-version = "1.0.2"
+version = "1.0.3"
 description = "Professional Python client for VPN Subscription API"
 readme = "README.md"
 license = { text = "MIT" }
