@@ -9,6 +9,7 @@ class BaseModelConfig(BaseModel):
     """Base model with shared configuration."""
 
     model_config = ConfigDict(
+        extra="ignore",
         frozen=False,
         validate_assignment=True,
         use_enum_values=True,

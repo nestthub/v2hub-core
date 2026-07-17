@@ -9,8 +9,10 @@ from __future__ import annotations
 import base64
 import logging
 from typing import Any
+import typing_extensions
 
 from v2hub.core.exceptions import VPNAPIError
+from v2hub.models.requests import SourceCreate, SourceUpdateRequest
 
 from .core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, with_async_retry
 from .http.client import HTTPClient
@@ -146,7 +148,7 @@ class AsyncVPNClient:
         self,
         name: str,
         description: str | None = None,
-        sources: list[str] = [],
+        sources: list[SourceCreate] = [],
     ) -> Subscription:
         """
         Create a new subscription.
@@ -276,7 +278,7 @@ class AsyncVPNClient:
     async def add_sources(
         self,
         token: str,
-        sources: list[str],
+        sources: list[SourceCreate],
     ) -> Subscription:
         """
         Add sources to subscription.
@@ -306,7 +308,7 @@ class AsyncVPNClient:
     async def replace_sources(
         self,
         token: str,
-        sources: list[str],
+        sources: list[SourceCreate],
     ) -> Subscription:
         """
         Replace all sources in subscription.
@@ -363,6 +365,7 @@ class AsyncVPNClient:
         )
         return Subscription(**response.json())
 
+    @typing_extensions.deprecated('The `update_comment()` method is deprecated; use `update_source()` instead.', category=None)
     @with_async_retry()
     async def update_comment(
         self,
@@ -390,6 +393,41 @@ class AsyncVPNClient:
         request = CommentUpdateRequest(config_id=config_id, comment=comment)
         response = await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}/comments",
+            json=request.model_dump(mode="json", exclude_none=True),
+        )
+
+
+    @with_async_retry()
+    async def update_source(
+        self,
+        token: str,
+        config_id: str,
+        comment: str | None,
+        is_hidden: bool = False,
+        max_depth: int = 3,
+    ):
+        """
+        Update source configuration.
+    
+        Args:
+            token: Subscription token.
+            config_id: Source configuration identifier.
+            comment: Comment for the source (None to remove).
+            is_hidden: Whether the source should be hidden.
+            max_depth: Maximum recursion depth for resolving nested subscriptions.
+    
+        Returns:
+            Updated subscription.
+    
+        Raises:
+            SubscriptionNotFoundError: Subscription not found.
+            ValidationError: Invalid request parameters.
+            AuthenticationError: Invalid API token.
+            VPNAPIError: Other API errors.
+        """
+        request = SourceUpdateRequest(config_id=config_id, comment=comment, is_hidden=is_hidden, max_depth=max_depth)
+        response = await self._http_client.patch(
+            f"/api/{__api_version__}/subs/{token}/config",
             json=request.model_dump(mode="json", exclude_none=True),
         )
 

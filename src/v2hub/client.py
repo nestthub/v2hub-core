@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+import typing_extensions
+
+from v2hub.models.requests import SourceCreate
 
 from .async_client import AsyncVPNClient
 from .core.retry import CircuitBreakerConfig, RetryConfig
@@ -123,7 +126,7 @@ class VPNClient:
         self,
         name: str,
         description: str | None = None,
-        sources: list[str] | None = None,
+        sources: list[SourceCreate] | None = None,
     ) -> Subscription:
         """Create a new subscription."""
         return self._run(
@@ -157,11 +160,11 @@ class VPNClient:
     # Source Management
     # ═══════════════════════════════════════════════════════════════════════
 
-    def add_sources(self, token: str, sources: list[str]) -> Subscription:
+    def add_sources(self, token: str, sources: list[SourceCreate]) -> Subscription:
         """Add sources to subscription."""
         return self._run(self._async_client.add_sources(token, sources))
 
-    def replace_sources(self, token: str, sources: list[str]) -> Subscription:
+    def replace_sources(self, token: str, sources: list[SourceCreate]) -> Subscription:
         """Replace all sources in subscription."""
         return self._run(self._async_client.replace_sources(token, sources))
 
@@ -169,6 +172,8 @@ class VPNClient:
         """Remove specific sources from subscription."""
         return self._run(self._async_client.remove_sources(token, source_ids))
 
+
+    @typing_extensions.deprecated('The `update_comment()` method is deprecated; use `update_source()` instead.', category=None)
     def update_comment(
         self,
         token: str,
@@ -178,6 +183,25 @@ class VPNClient:
         """Update comment for a specific config."""
         return self._run(
             self._async_client.update_comment(token, config_id, comment)
+        )
+
+    def update_source(
+        self,
+        token: str,
+        config_id: str,
+        comment: str | None,
+        is_hidden: bool = False,
+        max_depth: int = 3,
+    ):
+        """Update source configuration."""
+        return self._run(
+            self._async_client.update_source(
+                token=token,
+                config_id=config_id,
+                comment=comment,
+                is_hidden=is_hidden,
+                max_depth=max_depth,
+            )
         )
 
     # ═══════════════════════════════════════════════════════════════════════
