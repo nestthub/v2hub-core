@@ -189,11 +189,16 @@ class VPNClient:
         self,
         token: str,
         config_id: str,
-        comment: str | None,
-        is_hidden: bool = False,
-        max_depth: int = 3,
+        comment: str | None = None,
+        is_hidden: bool | None = None,
+        max_depth: int | None = None,
     ):
-        """Update source configuration."""
+        """
+        Partially update a source's settings within a subscription.
+
+        Only fields explicitly passed (non-None) are changed; any field
+        left as None is left untouched server-side.
+        """
         return self._run(
             self._async_client.update_source(
                 token=token,

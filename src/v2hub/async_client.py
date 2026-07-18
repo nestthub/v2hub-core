@@ -402,28 +402,37 @@ class AsyncVPNClient:
         self,
         token: str,
         config_id: str,
-        comment: str | None,
-        is_hidden: bool = False,
-        max_depth: int = 3,
+        comment: str | None = None,
+        is_hidden: bool | None = None,
+        max_depth: int | None = None,
     ):
         """
-        Update source configuration.
-    
+        Partially update a source's settings within a subscription.
+
+        Only fields explicitly passed (non-None) are changed server-side;
+        any field left as None is left untouched. This means you don't
+        need to know or re-supply a source's current is_hidden/max_depth
+        just to change its comment, and vice versa.
+
         Args:
             token: Subscription token.
             config_id: Source configuration identifier.
-            comment: Comment for the source (None to remove).
-            is_hidden: Whether the source should be hidden.
-            max_depth: Maximum recursion depth for resolving nested subscriptions.
-    
+            comment: New comment text, or None to leave unchanged.
+            is_hidden: New hidden state, or None to leave unchanged.
+            max_depth: New max nesting depth (0-3), or None to leave unchanged.
+
         Returns:
             Updated subscription.
-    
+
         Raises:
             SubscriptionNotFoundError: Subscription not found.
             ValidationError: Invalid request parameters.
             AuthenticationError: Invalid API token.
             VPNAPIError: Other API errors.
+
+        Example:
+            # Only change is_hidden, leave comment and max_depth as they are
+            await client.update_source(sub.token, "cfg123", is_hidden=True)
         """
         request = SourceUpdateRequest(config_id=config_id, comment=comment, is_hidden=is_hidden, max_depth=max_depth)
         response = await self._http_client.patch(

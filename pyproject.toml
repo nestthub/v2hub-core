@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "v2hub"
-version = "1.0.4"
+version = "1.0.5"
 description = "Professional Python client for VPN Subscription API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,6 +28,7 @@ dependencies = [
     "httpx>=0.25.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "twine>=6.2.0",
 ]
 
 [project.urls]
