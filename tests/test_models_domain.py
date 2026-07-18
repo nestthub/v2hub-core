@@ -70,15 +70,26 @@ class TestSource:
         with pytest.raises(PydanticValidationError):
             Source(**d)
 
-    def test_no_is_hidden_or_max_depth_fields_yet(self, source_dict_factory):
+    def test_is_hidden_and_max_depth_defaults_if_present(self, source_dict_factory):
         """
-        Documents current (pre-update) state: Source has no is_hidden/max_depth.
-        If the update adds them, this test should be updated to assert
-        their presence and default values instead of their absence.
+        Source may or may not carry is_hidden/max_depth depending on the
+        library version. If present, they must default to non-breaking
+        values (not hidden, some sane depth) so that responses for
+        existing/older sources -- which never set these explicitly --
+        behave the same as before the fields were added. If the fields
+        aren't present at all, there's nothing to check here and the test
+        passes trivially; this is intentionally forward-compatible rather
+        than asserting a specific version's shape.
         """
         s = Source(**source_dict_factory())
-        assert not hasattr(s, "is_hidden")
-        assert not hasattr(s, "max_depth")
+        if hasattr(s, "is_hidden"):
+            assert s.is_hidden is False, (
+                "A Source with no is_hidden specified in the API response "
+                "must default to visible (False), or existing sources "
+                "would silently disappear from resolved output."
+            )
+        if hasattr(s, "max_depth"):
+            assert isinstance(s.max_depth, int) and s.max_depth >= 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════

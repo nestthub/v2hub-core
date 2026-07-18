@@ -11,6 +11,8 @@ from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
 from v2hub.models.public import PublicSubscriptionResponse
 from v2hub.models.subscriptions import Subscription, SubscriptionListItem
 
+from ._helpers import wire_source_data_list
+
 
 BASE_URL = "https://api.example.com"
 TOKEN = "test-token"
@@ -76,6 +78,13 @@ class TestListSubscriptions:
 
 class TestCreateSubscription:
     async def test_sends_correct_payload(self, subscription_dict_factory):
+        """
+        Calling with plain-string sources (the original calling convention)
+        must still work; what matters is the source data reaches the wire
+        intact, regardless of whether the library now wraps each source
+        in an object (e.g. {"data": ..., "is_hidden": ..., "max_depth": ...})
+        or sends bare strings.
+        """
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/subs").mock(
                 return_value=httpx.Response(201, json=subscription_dict_factory())
@@ -92,7 +101,7 @@ class TestCreateSubscription:
         payload = json.loads(sent_body)
         assert payload["name"] == "My VPN"
         assert payload["description"] == "desc"
-        assert payload["sources"] == ["vless://a"]
+        assert wire_source_data_list(payload["sources"]) == ["vless://a"]
 
     async def test_minimal_call_no_description_no_sources(
         self, subscription_dict_factory
@@ -212,7 +221,8 @@ class TestAddSources:
         import json
 
         payload = json.loads(route.calls.last.request.content)
-        assert payload == {"sources": ["vless://a", "vless://b"]}
+        assert set(payload.keys()) == {"sources"}
+        assert wire_source_data_list(payload["sources"]) == ["vless://a", "vless://b"]
 
     async def test_empty_sources_raises_before_request(self):
         async with make_client() as client:
@@ -232,7 +242,8 @@ class TestReplaceSources:
         import json
 
         payload = json.loads(route.calls.last.request.content)
-        assert payload == {"sources": ["vless://only"]}
+        assert set(payload.keys()) == {"sources"}
+        assert wire_source_data_list(payload["sources"]) == ["vless://only"]
 
     async def test_empty_list_allowed(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:

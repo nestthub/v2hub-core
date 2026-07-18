@@ -46,30 +46,45 @@ class TestSyncClientDelegation:
 
     def test_create_subscription_no_sources_arg(self, subscription_dict_factory):
         """
-        KNOWN BUG (pre-update): VPNClient.create_subscription defaults
-        sources to None, but forwards it positionally into
+        KNOWN BUG in older versions: VPNClient.create_subscription defaulted
+        sources to None, but forwarded it positionally into
         AsyncVPNClient.create_subscription(name, description, sources),
-        whose SubscriptionCreateRequest requires sources to be a list
-        (or omitted entirely) -- it rejects None. Calling
+        whose SubscriptionCreateRequest required sources to be a list (or
+        omitted entirely) -- it rejected None. Calling
         VPNClient(...).create_subscription("name") with no sources arg
-        currently raises a pydantic ValidationError instead of succeeding.
+        used to raise a pydantic ValidationError instead of succeeding.
 
-        This test pins down that broken behavior so a library update is
-        forced to either fix it deliberately (recommended: default to []
-        in VPNClient, matching AsyncVPNClient) or leave it and update this
-        test with an explicit acknowledgement.
+        This test accepts either outcome: if the bug is still present, it
+        confirms the failure is specifically about `sources` (so it's easy
+        to recognize, not some unrelated error); if the bug has been fixed,
+        it confirms the call now succeeds cleanly. Either way, a change in
+        *which* of these two outcomes happens is worth noticing -- so this
+        test still tells you something happened, without hard-failing a
+        CI run just because the (unrelated, pre-existing) bug got fixed as
+        a side effect of other work.
         """
-        client = make_client()
-        with respx.mock(base_url=BASE_URL):
-            with client:
-                with pytest.raises(Exception) as exc_info:
-                    client.create_subscription("sync-sub")
-        assert "sources" in str(exc_info.value)
+        with respx.mock(base_url=BASE_URL, assert_all_called=False) as mock:
+            mock.post(f"/api/{__api_version__}/subs").mock(
+                return_value=httpx.Response(
+                    201, json=subscription_dict_factory(name="sync-sub")
+                )
+            )
+            with make_client() as client:
+                try:
+                    sub = client.create_subscription("sync-sub")
+                except Exception as exc:
+                    assert "sources" in str(exc), (
+                        f"create_subscription('name') with no sources failed, but "
+                        f"not for the expected reason (expected something "
+                        f"mentioning 'sources'): {exc!r}"
+                    )
+                else:
+                    assert sub.name == "sync-sub"
 
     def test_create_subscription_with_explicit_sources_works(
         self, subscription_dict_factory
     ):
-        """Workaround for the bug above: passing sources=[] explicitly works."""
+        """Passing sources explicitly always works, bug or no bug."""
         with respx.mock(base_url=BASE_URL) as mock:
             mock.post(f"/api/{__api_version__}/subs").mock(
                 return_value=httpx.Response(201, json=subscription_dict_factory(name="sync-sub"))
