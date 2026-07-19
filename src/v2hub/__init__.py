@@ -22,7 +22,7 @@ Example (Sync):
 
 from __future__ import annotations
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 __author__ = "nestt"
 __api_version__ = "v1"
 __all__ = [

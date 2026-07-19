@@ -16,8 +16,8 @@ from .base import BaseModelConfig
 
 class SourceCreate(BaseModelConfig):
     data: Annotated[str, Field(description="Source data (config, URL, or token)", min_length=1)]
-    is_hidden: Annotated[bool, Field(description="Whether the source is hidden from end users", default=False)]
-    max_depth: Annotated[int, Field(description="Max nesting depth for source visibility propagation (0-3)", ge=0, le=3, default=3)]
+    is_hidden: Annotated[bool | None, Field(description="Whether the source is hidden from end users", default=None)] = None
+    max_depth: Annotated[int | None, Field(description="Max nesting depth for source visibility propagation (0-3)", ge=0, le=3, default=None)] = None
 
 
 def _normalize_sources(v: list[str | dict | SourceCreate]) -> list[dict]:

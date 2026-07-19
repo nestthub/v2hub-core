@@ -133,7 +133,7 @@ class TestSubscriptionCreateRequest:
         req = SubscriptionCreateRequest(name="x", sources=["vless://a"])
         item = req.sources[0]
         is_hidden = get_attr_or_key(item, "is_hidden", default=False)
-        assert is_hidden is False, (
+        assert is_hidden is None, (
             "Plain-string sources must not default to hidden -- that would "
             "silently change behavior for all existing callers."
         )
