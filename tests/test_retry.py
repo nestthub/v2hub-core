@@ -19,7 +19,6 @@ from v2hub.core.retry import (
     with_retry,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # RetryConfig.calculate_delay
 # ═══════════════════════════════════════════════════════════════════════════
@@ -52,8 +51,14 @@ class TestRetryConfigCalculateDelay:
         cfg = RetryConfig()
         from v2hub.core.exceptions import (
             RateLimitError as RLE,
+        )
+        from v2hub.core.exceptions import (
             ServerError as SE,
+        )
+        from v2hub.core.exceptions import (
             ServiceUnavailableError as SUE,
+        )
+        from v2hub.core.exceptions import (
             TimeoutError as TOE,
         )
         assert cfg.retryable_exceptions == (TOE, SE, SUE, RLE)

@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "v2hub"
-version = "1.0.6"
+version = "1.0.7"
 description = "Professional Python client for VPN Subscription API"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "nestt", email = "nestt@tutamail.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -46,31 +46,34 @@ dev = [
     "mypy>=1.5.0",
     "ruff>=0.1.0",
     "pre-commit>=3.4.0",
+    "respx>=0.23.1",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/v2hub"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 src = ["src"]
 
+[tool.ruff.lint]
 select = [
     "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TCH", "PTH", "RUF",
 ]
 
 ignore = ["E501", "B008", "ARG002"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
 "tests/*" = ["ARG001", "ARG002"]
+"src/v2hub/models/*.py" = ["TC001", "TC003"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["v2hub"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

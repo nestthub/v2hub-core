@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable
-
-import httpx
+from typing import TYPE_CHECKING, Any
 
 from .client import Middleware, RequestContext
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import httpx
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,7 @@ class LoggingMiddleware(Middleware):
         start_time = time.time()
 
         try:
-            response = await call_next()
+            response: httpx.Response = await call_next()
 
             # Log response
             duration = time.time() - start_time
@@ -112,7 +116,7 @@ class MetricsMiddleware(Middleware):
         start_time = time.time()
 
         try:
-            response = await call_next()
+            response: httpx.Response = await call_next()
             duration = time.time() - start_time
             self.total_duration += duration
             return response
@@ -164,4 +168,5 @@ class RetryMiddleware(Middleware):
         """Track retry attempts in context."""
         # This middleware mainly updates context
         # Actual retry logic is in retry.py decorators
-        return await call_next()
+        response: httpx.Response = await call_next()
+        return response

@@ -7,11 +7,15 @@ Provides foundation for making HTTP requests with extensibility through middlewa
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from v2hub.core.exceptions import NetworkError, TimeoutError, get_exception_for_status
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +75,8 @@ class Middleware:
         Returns:
             HTTP response
         """
-        return await call_next()
+        response: httpx.Response = await call_next()
+        return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -113,7 +118,7 @@ class HTTPClient:
         self._client: httpx.AsyncClient | None = None
         self._default_headers = headers or {}
 
-    async def __aenter__(self) -> "HTTPClient":
+    async def __aenter__(self) -> HTTPClient:
         """Async context manager entry."""
         await self.connect()
         return self

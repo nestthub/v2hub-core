@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any
 
 from pydantic import Field
 
 from .base import BaseModelConfig
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Response Models
@@ -18,9 +17,9 @@ class RefreshSubscriptionResponse(BaseModelConfig):
     failed: Annotated[int, Field(0, description="Number of sources that failed to refresh")]
     skipped: Annotated[int, Field(0, description="Number of sources skipped during refresh")]
     total: Annotated[int, Field(0, description="Total URLs processed")]
-    
-    message: Optional[str] = Field(None, description="Optional status message")
-    errors: Optional[List[str]] = Field(
+
+    message: str | None = Field(None, description="Optional status message")
+    errors: list[str] | None = Field(
         None,
         description="List of errors per URL",
         json_schema_extra={

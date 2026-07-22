@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import typing_extensions
 import warnings
-from typing import Annotated
+from typing import Annotated, Any
 
+import typing_extensions
 from pydantic import Field, field_validator, model_validator
 
 from .base import BaseModelConfig
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Request Models
@@ -20,7 +19,7 @@ class SourceCreate(BaseModelConfig):
     max_depth: Annotated[int | None, Field(description="Max nesting depth for source visibility propagation (0-3)", ge=0, le=3, default=None)] = None
 
 
-def _normalize_sources(v: list[str | dict | SourceCreate]) -> list[dict]:
+def _normalize_sources(v: list[str | dict[str, Any] | SourceCreate]) -> list[dict[str, Any]]:
     """
     Normalize a list of sources into deduplicated SourceCreate-shaped dicts.
 
@@ -31,7 +30,7 @@ def _normalize_sources(v: list[str | dict | SourceCreate]) -> list[dict]:
     SourceCreate instances. Deduplicates by the (stripped) `data` value,
     preserving first-occurrence order.
     """
-    cleaned: list[dict] = []
+    cleaned: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for item in v:
@@ -70,7 +69,7 @@ class SubscriptionCreateRequest(BaseModelConfig):
     description: Annotated[
         str | None, Field(None, description="Optional description", max_length=255)
     ] = None
-    sources: Annotated[list[SourceCreate], Field([], description="Initial sources")] = []
+    sources: Annotated[list[SourceCreate], Field(default_factory=list, description="Initial sources")]
 
     @field_validator("name")
     @classmethod
@@ -83,7 +82,7 @@ class SubscriptionCreateRequest(BaseModelConfig):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def validate_sources(cls, v: list[str | dict | SourceCreate] | None) -> list[dict]:
+    def validate_sources(cls, v: list[str | dict[str, Any] | SourceCreate] | None) -> list[dict[str, Any]]:
         """Validate and deduplicate sources."""
         if v is None:
             return []
@@ -95,7 +94,7 @@ class SubscriptionUpdateRequest(BaseModelConfig):
     description: Annotated[str | None, Field(None, description="New description", max_length=64)] = None
 
     @model_validator(mode="after")
-    def validate_at_least_one_field(self) -> "SubscriptionUpdateRequest":
+    def validate_at_least_one_field(self) -> SubscriptionUpdateRequest:
         """Ensure at least one field is provided."""
         if self.name is None and self.description is None:
             raise ValueError("At least one field must be provided for update")
@@ -119,7 +118,7 @@ class SourceAddRequest(BaseModelConfig):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def validate_sources(cls, v: list[str | dict | SourceCreate]) -> list[dict]:
+    def validate_sources(cls, v: list[str | dict[str, Any] | SourceCreate]) -> list[dict[str, Any]]:
         """Validate and deduplicate sources."""
         cleaned = _normalize_sources(v)
         if not cleaned:
@@ -134,7 +133,7 @@ class SourceReplaceRequest(BaseModelConfig):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def validate_sources(cls, v: list[str | dict | SourceCreate]) -> list[dict]:
+    def validate_sources(cls, v: list[str | dict[str, Any] | SourceCreate]) -> list[dict[str, Any]]:
         """Validate and deduplicate sources."""
         return _normalize_sources(v)
 
@@ -197,7 +196,7 @@ class CommentUpdateRequest(BaseModelConfig):
     config_id: Annotated[str, Field(description="Config id", min_length=1)]
     comment: Annotated[str | None, Field(None, description="Comment text", max_length=255)]
 
-    def __init__(self, **data) -> None:
+    def __init__(self, **data: Any) -> None:
         warnings.warn(
             "CommentUpdateRequest is deprecated and will not receive further "
             "updates; use SourceUpdateRequest instead.",

@@ -9,11 +9,13 @@ from __future__ import annotations
 import base64
 import logging
 from typing import Any
+
 import typing_extensions
 
 from v2hub.core.exceptions import VPNAPIError
 from v2hub.models.requests import SourceCreate, SourceUpdateRequest
 
+from . import __api_version__
 from .core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, with_async_retry
 from .http.client import HTTPClient
 from .models import (
@@ -28,8 +30,6 @@ from .models import (
     SubscriptionListItem,
     SubscriptionUpdateRequest,
 )
-
-from . import __api_version__
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class AsyncVPNClient:
         # Initialize circuit breaker
         self._circuit_breaker = CircuitBreaker(self.circuit_breaker_config)
 
-    async def __aenter__(self) -> "AsyncVPNClient":
+    async def __aenter__(self) -> AsyncVPNClient:
         """Async context manager entry."""
         await self._http_client.connect()
         return self
@@ -148,7 +148,7 @@ class AsyncVPNClient:
         self,
         name: str,
         description: str | None = None,
-        sources: list[SourceCreate] = [],
+        sources: list[SourceCreate] | None = None,
     ) -> Subscription:
         """
         Create a new subscription.
@@ -174,6 +174,10 @@ class AsyncVPNClient:
                 sources=["vless://uuid@server:443#Server1"]
             )
         """
+        if sources is None:
+            sources = []
+
+
         request = SubscriptionCreateRequest(
             name=name,
             description=description,
@@ -372,7 +376,7 @@ class AsyncVPNClient:
         token: str,
         config_id: str,
         comment: str | None,
-    ):
+    ) -> None:
         """
         Update comment for a specific config.
 
@@ -391,7 +395,7 @@ class AsyncVPNClient:
             VPNAPIError: Other API errors
         """
         request = CommentUpdateRequest(config_id=config_id, comment=comment)
-        response = await self._http_client.patch(
+        await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}/comments",
             json=request.model_dump(mode="json", exclude_none=True),
         )
@@ -405,7 +409,7 @@ class AsyncVPNClient:
         comment: str | None = None,
         is_hidden: bool | None = None,
         max_depth: int | None = None,
-    ):
+    ) -> None:
         """
         Partially update a source's settings within a subscription.
 
@@ -435,7 +439,7 @@ class AsyncVPNClient:
             await client.update_source(sub.token, "cfg123", is_hidden=True)
         """
         request = SourceUpdateRequest(config_id=config_id, comment=comment, is_hidden=is_hidden, max_depth=max_depth)
-        response = await self._http_client.patch(
+        await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}/config",
             json=request.model_dump(mode="json", exclude_none=True),
         )
@@ -470,17 +474,17 @@ class AsyncVPNClient:
     @with_async_retry()
     async def get_public_subscription(self, token: str) -> PublicSubscriptionResponse:
         response = await self._http_client.get(f"/sub/{token}")
-    
+
         if response.status_code != 200:
             raise VPNAPIError(f"HTTP {response.status_code}: {response.text}")
-    
+
         # --- content (оставляем как есть, base64) ---
         content_b64 = response.text.strip()
-    
+
         # --- title (декодируем, потому что модель хранит уже нормальную строку) ---
         title = "v2hub"
         title_header = response.headers.get("profile-title")
-    
+
         if title_header and title_header.startswith("base64:"):
             try:
                 encoded = title_header.split("base64:")[1]
@@ -488,7 +492,7 @@ class AsyncVPNClient:
             except Exception:
                 # fallback — не валим всё из-за кривого заголовка
                 pass
-    
+
         return PublicSubscriptionResponse(
             title=title,
             content=content_b64,

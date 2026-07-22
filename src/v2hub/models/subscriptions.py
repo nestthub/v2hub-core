@@ -27,7 +27,7 @@ class Subscription(BaseModelConfig):
     updated_at: Annotated[datetime, Field(description="Last update timestamp")]
 
     @model_validator(mode="after")
-    def validate_sources_count(self) -> "Subscription":
+    def validate_sources_count(self) -> Subscription:
         """Validate that sources_count matches actual sources length."""
         # Note: API may return different count due to external URLs
         # This is just a sanity check

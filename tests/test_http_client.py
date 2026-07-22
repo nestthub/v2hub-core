@@ -7,7 +7,6 @@ import respx
 from v2hub.core.exceptions import NetworkError, NotFoundError, TimeoutError, ValidationError
 from v2hub.http.client import HTTPClient, Middleware, RequestContext
 
-
 BASE_URL = "https://api.example.com"
 
 

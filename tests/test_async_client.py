@@ -6,13 +6,12 @@ import respx
 
 from v2hub import __api_version__
 from v2hub.async_client import AsyncVPNClient
-from v2hub.core.exceptions import NotFoundError, ValidationError
+from v2hub.core.exceptions import NotFoundError
 from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
 from v2hub.models.public import PublicSubscriptionResponse
 from v2hub.models.subscriptions import Subscription, SubscriptionListItem
 
 from ._helpers import wire_source_data_list
-
 
 BASE_URL = "https://api.example.com"
 TOKEN = "test-token"
@@ -363,7 +362,7 @@ class TestGetPublicSubscription:
         import base64
 
         content = base64.b64encode(b"vless://a").decode()
-        title_b64 = base64.b64encode("My Custom Title".encode()).decode()
+        title_b64 = base64.b64encode(b"My Custom Title").decode()
         with respx.mock(base_url=BASE_URL) as mock:
             mock.get(f"/sub/{TOKEN}").mock(
                 return_value=httpx.Response(
@@ -399,7 +398,7 @@ class TestGetPublicSubscription:
         codepath below documents the (currently unreachable) manual branch.
         """
         with respx.mock(base_url=BASE_URL) as mock:
-            mock.get(f"/sub/missing").mock(return_value=httpx.Response(404, text="not found"))
+            mock.get("/sub/missing").mock(return_value=httpx.Response(404, text="not found"))
             async with make_client() as client:
                 with pytest.raises(NotFoundError) as exc_info:
                     await client.get_public_subscription("missing")

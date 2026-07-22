@@ -22,64 +22,88 @@ Example (Sync):
 
 from __future__ import annotations
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 __author__ = "nestt"
 __api_version__ = "v1"
 __all__ = [
-    # Version
-    "__version__",
-    "__api_version__",
-    # Clients
     "AsyncVPNClient",
-    "VPNClient",
-    # Models
-    "Subscription",
-    "SubscriptionListItem",
-    "Source",
-    "SourceType",
-    "RefreshSubscriptionResponse",
-    "PublicSubscriptionResponse",
-    "ErrorResponse",
-    # Request models
-    "SubscriptionCreateRequest",
-    "SubscriptionUpdateRequest",
-    "SourceAddRequest",
-    "SourceReplaceRequest",
-    "SourceRemoveRequest",
-    "CommentUpdateRequest",
-    # Exceptions
-    "VPNAPIError",
-    "ValidationError",
     "AuthenticationError",
     "AuthorizationError",
-    "NotFoundError",
+    "CacheError",
+    "CircuitBreakerConfig",
+    "CircuitState",
+    "CircularReferenceError",
+    "CommentUpdateRequest",
     "ConflictError",
+    "DuplicateNameError",
+    "ErrorResponse",
+    "ExternalFetchError",
+    "InvalidConfigError",
+    "InvalidURLError",
+    "NestingTooDeepError",
+    "NetworkError",
+    "NotFoundError",
+    "PublicSubscriptionResponse",
     "RateLimitError",
+    "RefreshSubscriptionResponse",
+    "RetryConfig",
     "ServerError",
     "ServiceUnavailableError",
-    "NetworkError",
-    "TimeoutError",
-    "InvalidURLError",
-    "InvalidConfigError",
-    "SubscriptionNotFoundError",
+    "Source",
+    "SourceAddRequest",
     "SourceNotFoundError",
-    "DuplicateNameError",
-    "CircularReferenceError",
-    "NestingTooDeepError",
+    "SourceRemoveRequest",
+    "SourceReplaceRequest",
+    "SourceType",
+    "Subscription",
+    "SubscriptionCreateRequest",
+    "SubscriptionListItem",
+    "SubscriptionNotFoundError",
+    "SubscriptionUpdateRequest",
+    "TimeoutError",
     "TooManyConfigsError",
     "TooManySourcesError",
     "TooManySubscriptionsError",
-    "ExternalFetchError",
-    "CacheError",
-    # Retry
-    "RetryConfig",
-    "CircuitBreakerConfig",
-    "CircuitState",
+    "VPNAPIError",
+    "VPNClient",
+    "ValidationError",
+    "__api_version__",
+    "__version__",
 ]
 
 # Import clients
 from .async_client import AsyncVPNClient
 from .client import VPNClient
+
+# Import exceptions
+from .core.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    CacheError,
+    CircularReferenceError,
+    ConflictError,
+    DuplicateNameError,
+    ExternalFetchError,
+    InvalidConfigError,
+    InvalidURLError,
+    NestingTooDeepError,
+    NetworkError,
+    NotFoundError,
+    RateLimitError,
+    ServerError,
+    ServiceUnavailableError,
+    SourceNotFoundError,
+    SubscriptionNotFoundError,
+    TimeoutError,
+    TooManyConfigsError,
+    TooManySourcesError,
+    TooManySubscriptionsError,
+    ValidationError,
+    VPNAPIError,
+)
+
+# Import retry utilities
+from .core.retry import CircuitBreakerConfig, CircuitState, RetryConfig
 
 # Import models
 from .models import (
@@ -97,33 +121,3 @@ from .models import (
     SubscriptionListItem,
     SubscriptionUpdateRequest,
 )
-
-# Import exceptions
-from .core.exceptions import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    InvalidURLError,
-    InvalidConfigError,
-    NetworkError,
-    NotFoundError,
-    RateLimitError,
-    ServerError,
-    ServiceUnavailableError,
-    SourceNotFoundError,
-    DuplicateNameError,
-    CircularReferenceError,
-    NestingTooDeepError,
-    TooManyConfigsError,
-    TooManySourcesError,
-    TooManySubscriptionsError,
-    ExternalFetchError,
-    CacheError,
-    SubscriptionNotFoundError,
-    TimeoutError,
-    ValidationError,
-    VPNAPIError,
-)
-
-# Import retry utilities
-from .core.retry import CircuitBreakerConfig, CircuitState, RetryConfig

@@ -324,10 +324,9 @@ class TestCommentUpdateRequest:
             warnings.simplefilter("ignore", DeprecationWarning)
             req = CommentUpdateRequest(config_id="cfg1", comment="c" * 255)
         assert req.comment == "c" * 255
-        with pytest.raises(PydanticValidationError):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                CommentUpdateRequest(config_id="cfg1", comment="c" * 256)
+        with pytest.raises(PydanticValidationError), warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            CommentUpdateRequest(config_id="cfg1", comment="c" * 256)
 
     def test_exclude_none_serialization_drops_comment(self):
         import warnings

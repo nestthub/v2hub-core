@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 import respx
 
 from v2hub import __api_version__
 from v2hub.client import VPNClient
 from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
-
 
 BASE_URL = "https://api.example.com"
 TOKEN = "test-token"

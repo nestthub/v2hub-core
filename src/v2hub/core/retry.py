@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from v2hub.core.exceptions import (
     RateLimitError,
@@ -22,17 +22,25 @@ from v2hub.core.exceptions import (
     TimeoutError,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "RetryConfig",
     "CircuitBreakerConfig",
     "CircuitState",
-    "with_retry",
+    "RetryConfig",
     "with_async_retry",
+    "with_retry",
 ]
 
 T = TypeVar("T")
+P = ParamSpec("P")
+
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Retry Configuration
@@ -121,7 +129,10 @@ class CircuitBreaker:
         self.last_failure_time: float | None = None
         self._lock = asyncio.Lock()
 
-    async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def call(self,
+        func: Callable[P, Coroutine[Any, Any, T]],
+        *args: P.args, **kwargs: P.kwargs
+    ) -> T:
         """
         Execute function with circuit breaker protection.
 
@@ -155,7 +166,7 @@ class CircuitBreaker:
             await self._on_success()
             return result
 
-        except Exception as e:
+        except Exception:
             await self._on_failure()
             raise
 
@@ -204,69 +215,57 @@ class CircuitBreaker:
 def with_async_retry(
     config: RetryConfig | None = None,
     circuit_breaker: CircuitBreaker | None = None,
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+) -> Callable[
+    [Callable[P, Coroutine[Any, Any, T]]],
+    Callable[P, Coroutine[Any, Any, T]],
+]:
     """
     Decorator for async functions with retry logic.
-
-    Args:
-        config: Retry configuration
-        circuit_breaker: Optional circuit breaker
-
-    Returns:
-        Decorated function
-
-    Example:
-        @with_async_retry()
-        async def api_call():
-            ...
     """
     if config is None:
         config = RetryConfig()
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(
+        func: Callable[P, Coroutine[Any, Any, T]],
+    ) -> Callable[P, Coroutine[Any, Any, T]]:
+
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> T:
             last_exception: Exception | None = None
 
             for attempt in range(config.max_retries + 1):
                 try:
-                    # Use circuit breaker if provided
                     if circuit_breaker:
-                        return await circuit_breaker.call(func, *args, **kwargs)
+                        return await circuit_breaker.call(
+                            func,
+                            *args,
+                            **kwargs,
+                        )
+
                     return await func(*args, **kwargs)
 
                 except config.retryable_exceptions as e:
                     last_exception = e
 
-                    # Don't retry on last attempt
                     if attempt >= config.max_retries:
                         break
 
-                    # Calculate delay
                     if isinstance(e, RateLimitError) and e.retry_after:
-                        delay = e.retry_after
+                        delay: float = e.retry_after
                     else:
                         delay = config.calculate_delay(attempt)
 
                     logger.warning(
                         f"Attempt {attempt + 1}/{config.max_retries + 1} failed: {e}. "
                         f"Retrying in {delay:.2f}s...",
-                        extra={
-                            "attempt": attempt + 1,
-                            "max_retries": config.max_retries + 1,
-                            "delay": delay,
-                            "exception": type(e).__name__,
-                        },
                     )
 
                     await asyncio.sleep(delay)
 
-            # All retries exhausted
-            logger.error(
-                f"All {config.max_retries + 1} attempts failed",
-                extra={"exception": type(last_exception).__name__ if last_exception else None},
-            )
-            raise cast(Exception, last_exception)
+            raise cast("Exception", last_exception)
 
         return wrapper
 
@@ -316,7 +315,7 @@ def with_retry(
 
                     # Calculate delay
                     if isinstance(e, RateLimitError) and e.retry_after:
-                        delay = e.retry_after
+                        delay: float = e.retry_after
                     else:
                         delay = config.calculate_delay(attempt)
 
@@ -329,7 +328,7 @@ def with_retry(
 
             # All retries exhausted
             logger.error(f"All {config.max_retries + 1} attempts failed")
-            raise cast(Exception, last_exception)
+            raise cast("Exception", last_exception)
 
         return wrapper
 

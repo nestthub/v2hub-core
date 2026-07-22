@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import Field, field_validator
 
@@ -27,7 +27,7 @@ class Source(BaseModelConfig):
 
     @field_validator("data")
     @classmethod
-    def validate_data(cls, v: str, info: Any) -> str:
+    def validate_data(cls, v: str) -> str:
         """Validate source data based on type."""
         # Add custom validation logic here
         if not v or not v.strip():

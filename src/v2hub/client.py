@@ -7,22 +7,28 @@ Sync wrapper with proper event loop management.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
+
 import typing_extensions
 
-from v2hub.models.requests import SourceCreate
-
 from .async_client import AsyncVPNClient
-from .core.retry import CircuitBreakerConfig, RetryConfig
-from .models import (
-    PublicSubscriptionResponse,
-    RefreshSubscriptionResponse,
-    Subscription,
-    SubscriptionListItem,
-)
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+    from v2hub.models.requests import SourceCreate
+
+    from .core.retry import CircuitBreakerConfig, RetryConfig
+    from .models import (
+        PublicSubscriptionResponse,
+        RefreshSubscriptionResponse,
+        Subscription,
+        SubscriptionListItem,
+    )
 
 __all__ = ["VPNClient"]
 
+T = TypeVar("T")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Sync VPN Client
@@ -73,7 +79,7 @@ class VPNClient:
             retry_config: Custom retry configuration
             circuit_breaker_config: Circuit breaker configuration
         """
-        self._async_client = AsyncVPNClient(
+        self._async_client: AsyncVPNClient = AsyncVPNClient(
             base_url=base_url,
             api_token=api_token,
             timeout=timeout,
@@ -83,7 +89,7 @@ class VPNClient:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._owned_loop = False
 
-    def __enter__(self) -> "VPNClient":
+    def __enter__(self) -> VPNClient:
         """Context manager entry."""
         self._loop = asyncio.new_event_loop()
         self._owned_loop = True
@@ -99,7 +105,7 @@ class VPNClient:
             self._loop = None
             self._owned_loop = False
 
-    def _run(self, coro: Any) -> Any:
+    def _run(self, coro: Coroutine[Any, Any, T]) -> T:
         """
         Run async coroutine synchronously.
 
@@ -179,9 +185,9 @@ class VPNClient:
         token: str,
         config_id: str,
         comment: str | None,
-    ):
+    ) -> None:
         """Update comment for a specific config."""
-        return self._run(
+        self._run(
             self._async_client.update_comment(token, config_id, comment)
         )
 
@@ -192,14 +198,14 @@ class VPNClient:
         comment: str | None = None,
         is_hidden: bool | None = None,
         max_depth: int | None = None,
-    ):
+    ) -> None:
         """
         Partially update a source's settings within a subscription.
 
         Only fields explicitly passed (non-None) are changed; any field
         left as None is left untouched server-side.
         """
-        return self._run(
+        self._run(
             self._async_client.update_source(
                 token=token,
                 config_id=config_id,

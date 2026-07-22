@@ -11,7 +11,6 @@ from v2hub.models.responses import ErrorResponse, RefreshSubscriptionResponse
 from v2hub.models.sources import Source
 from v2hub.models.subscriptions import Subscription, SubscriptionListItem
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # SourceType
 # ═══════════════════════════════════════════════════════════════════════════
