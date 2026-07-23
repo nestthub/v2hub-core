@@ -22,8 +22,15 @@ Example (Sync):
 
 from __future__ import annotations
 
-__version__ = "1.0.7"
-__author__ = "nestt"
+from importlib.metadata import PackageNotFoundError, metadata, version
+
+try:
+    __version__ = version("v2hub")
+    __author__ = metadata("v2hub")["Author-email"]
+except PackageNotFoundError:
+    __version__ = "unknown"
+    __author__ = "unknown"
+
 __api_version__ = "v1"
 __all__ = [
     "AsyncVPNClient",
