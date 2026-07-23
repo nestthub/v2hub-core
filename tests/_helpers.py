@@ -18,6 +18,7 @@ input is rejected, or the data value is silently dropped/altered), these
 helpers will still fail the test -- that's a real regression, not shape
 noise.
 """
+
 from __future__ import annotations
 
 from typing import Any

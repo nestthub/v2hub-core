@@ -13,6 +13,7 @@ from .base import BaseModelConfig
 
 class RefreshSubscriptionResponse(BaseModelConfig):
     """Response from manual refresh operation."""
+
     refreshed: Annotated[int, Field(0, description="Number of successfully refreshed sources")]
     failed: Annotated[int, Field(0, description="Number of sources that failed to refresh")]
     skipped: Annotated[int, Field(0, description="Number of sources skipped during refresh")]
@@ -23,10 +24,7 @@ class RefreshSubscriptionResponse(BaseModelConfig):
         None,
         description="List of errors per URL",
         json_schema_extra={
-            "example": [
-                "https://example.com: timeout",
-                "https://bad.url: invalid format"
-            ]
+            "example": ["https://example.com: timeout", "https://bad.url: invalid format"]
         },
     )
 
@@ -37,6 +35,3 @@ class ErrorResponse(BaseModelConfig):
     error: Annotated[str, Field(description="Error code/type", min_length=1)]
     message: Annotated[str, Field(description="Human-readable error message", min_length=1)]
     details: Annotated[dict[str, Any] | None, Field(None, description="Additional error details")]
-
-
-

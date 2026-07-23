@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
 
-
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -39,7 +38,6 @@ __all__ = [
 
 T = TypeVar("T")
 P = ParamSpec("P")
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -129,9 +127,8 @@ class CircuitBreaker:
         self.last_failure_time: float | None = None
         self._lock = asyncio.Lock()
 
-    async def call(self,
-        func: Callable[P, Coroutine[Any, Any, T]],
-        *args: P.args, **kwargs: P.kwargs
+    async def call(
+        self, func: Callable[P, Coroutine[Any, Any, T]], *args: P.args, **kwargs: P.kwargs
     ) -> T:
         """
         Execute function with circuit breaker protection.
@@ -201,8 +198,7 @@ class CircuitBreaker:
 
             elif self.failure_count >= self.config.failure_threshold:
                 logger.warning(
-                    f"Circuit breaker transitioning to OPEN "
-                    f"({self.failure_count} failures)"
+                    f"Circuit breaker transitioning to OPEN ({self.failure_count} failures)"
                 )
                 self.state = CircuitState.OPEN
 

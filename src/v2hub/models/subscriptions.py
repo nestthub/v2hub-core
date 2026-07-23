@@ -20,7 +20,9 @@ class Subscription(BaseModelConfig):
     name: Annotated[
         str, Field(description="User-defined subscription name", min_length=1, max_length=64)
     ]
-    description: Annotated[str | None, Field(None, description="Optional description", max_length=255)]
+    description: Annotated[
+        str | None, Field(None, description="Optional description", max_length=255)
+    ]
     sources: Annotated[list[Source], Field(default_factory=list, description="List of sources")]
     sources_count: Annotated[int, Field(description="Total resolved configs count", ge=0)]
     created_at: Annotated[datetime, Field(description="Creation timestamp")]

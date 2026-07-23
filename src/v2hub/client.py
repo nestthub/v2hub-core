@@ -135,9 +135,7 @@ class VPNClient:
         sources: list[SourceCreate] | None = None,
     ) -> Subscription:
         """Create a new subscription."""
-        return self._run(
-            self._async_client.create_subscription(name, description, sources)
-        )
+        return self._run(self._async_client.create_subscription(name, description, sources))
 
     def get_subscription(self, token: str) -> Subscription:
         """Get subscription by token."""
@@ -154,9 +152,7 @@ class VPNClient:
         description: str | None = None,
     ) -> Subscription:
         """Update subscription metadata."""
-        return self._run(
-            self._async_client.update_subscription(token, name, description)
-        )
+        return self._run(self._async_client.update_subscription(token, name, description))
 
     def delete_subscription(self, token: str) -> None:
         """Delete subscription."""
@@ -178,8 +174,9 @@ class VPNClient:
         """Remove specific sources from subscription."""
         return self._run(self._async_client.remove_sources(token, source_ids))
 
-
-    @typing_extensions.deprecated('The `update_comment()` method is deprecated; use `update_source()` instead.', category=None)
+    @typing_extensions.deprecated(
+        "The `update_comment()` method is deprecated; use `update_source()` instead.", category=None
+    )
     def update_comment(
         self,
         token: str,
@@ -187,9 +184,7 @@ class VPNClient:
         comment: str | None,
     ) -> None:
         """Update comment for a specific config."""
-        self._run(
-            self._async_client.update_comment(token, config_id, comment)
-        )
+        self._run(self._async_client.update_comment(token, config_id, comment))
 
     def update_source(
         self,

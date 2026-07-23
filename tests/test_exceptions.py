@@ -178,9 +178,7 @@ class TestGetExceptionForStatus:
         assert isinstance(exc, SubscriptionNotFoundError)
 
     def test_error_type_case_insensitive(self):
-        exc = get_exception_for_status(
-            400, "msg", response_data={"error": "VALIDATION_ERROR"}
-        )
+        exc = get_exception_for_status(400, "msg", response_data={"error": "VALIDATION_ERROR"})
         assert isinstance(exc, ValidationError)
 
     def test_message_extracted_from_body_message_field(self):
@@ -190,9 +188,7 @@ class TestGetExceptionForStatus:
         assert exc.message == "specific problem"
 
     def test_message_extracted_from_detail_string(self):
-        exc = get_exception_for_status(
-            400, "fallback", response_data={"detail": "detail problem"}
-        )
+        exc = get_exception_for_status(400, "fallback", response_data={"detail": "detail problem"})
         assert exc.message == "detail problem"
 
     def test_message_extracted_from_nested_detail_dict(self):
@@ -222,15 +218,11 @@ class TestGetExceptionForStatus:
         assert exc.message == "fallback"
 
     def test_retry_after_extracted_as_int(self):
-        exc = get_exception_for_status(
-            429, "msg", response_data={"retry_after": 42}
-        )
+        exc = get_exception_for_status(429, "msg", response_data={"retry_after": 42})
         assert exc.retry_after == 42
 
     def test_retry_after_extracted_from_numeric_string(self):
-        exc = get_exception_for_status(
-            429, "msg", response_data={"retry_after": "17"}
-        )
+        exc = get_exception_for_status(429, "msg", response_data={"retry_after": "17"})
         assert exc.retry_after == 17
 
     def test_retry_after_missing_is_none(self):
@@ -238,9 +230,7 @@ class TestGetExceptionForStatus:
         assert exc.retry_after is None
 
     def test_unknown_error_type_falls_back_to_status_map(self):
-        exc = get_exception_for_status(
-            404, "msg", response_data={"error": "some_unmapped_type"}
-        )
+        exc = get_exception_for_status(404, "msg", response_data={"error": "some_unmapped_type"})
         assert isinstance(exc, NotFoundError)
         assert not isinstance(exc, SubscriptionNotFoundError)
 
@@ -252,16 +242,12 @@ class TestGetExceptionForStatus:
 
 class TestGetExceptionForError:
     def test_error_type_without_status_code(self):
-        exc = get_exception_for_error(
-            "msg", response_data={"error": "not_found"}
-        )
+        exc = get_exception_for_error("msg", response_data={"error": "not_found"})
         assert isinstance(exc, NotFoundError)
         assert exc.status_code is None
 
     def test_falls_back_to_status_code_when_no_error_type_match(self):
-        exc = get_exception_for_error(
-            "msg", response_data={}, status_code=500
-        )
+        exc = get_exception_for_error("msg", response_data={}, status_code=500)
         assert isinstance(exc, ServerError)
 
     def test_falls_back_to_base_vpnapi_error(self):

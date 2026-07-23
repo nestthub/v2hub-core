@@ -108,7 +108,7 @@ class MetricsMiddleware(Middleware):
 
     async def __call__(
         self,
-        context: RequestContext,
+        _context: RequestContext,
         call_next: Callable[[], Any],
     ) -> httpx.Response:
         """Collect metrics."""
@@ -162,7 +162,7 @@ class RetryMiddleware(Middleware):
 
     async def __call__(
         self,
-        context: RequestContext,
+        _context: RequestContext,
         call_next: Callable[[], Any],
     ) -> httpx.Response:
         """Track retry attempts in context."""

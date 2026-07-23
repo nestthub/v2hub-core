@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Any
+from typing import Any, TypeVar
 
 import typing_extensions
+from pydantic import ValidationError as PydanticValidationError
 
-from v2hub.core.exceptions import VPNAPIError
+from v2hub.core.exceptions import ValidationError, VPNAPIError
 from v2hub.models.requests import SourceCreate, SourceUpdateRequest
 
 from . import __api_version__
@@ -34,6 +35,8 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 __all__ = ["AsyncVPNClient"]
+
+T = TypeVar("T")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -100,6 +103,20 @@ class AsyncVPNClient:
 
         # Initialize circuit breaker
         self._circuit_breaker = CircuitBreaker(self.circuit_breaker_config)
+
+    @staticmethod
+    def _build_request(model_cls: type[T], /, **kwargs: Any) -> T:
+        """
+        Construct a pydantic request model, mapping validation errors to v2hub.ValidationError.
+
+        This ensures callers only ever need to catch v2hub's own exception hierarchy
+        (ValidationError / VPNAPIError) instead of also needing to know about and
+        catch pydantic's ValidationError, which would leak an implementation detail.
+        """
+        try:
+            return model_cls(**kwargs)
+        except PydanticValidationError as e:
+            raise ValidationError(str(e)) from e
 
     async def __aenter__(self) -> AsyncVPNClient:
         """Async context manager entry."""
@@ -177,8 +194,8 @@ class AsyncVPNClient:
         if sources is None:
             sources = []
 
-
-        request = SubscriptionCreateRequest(
+        request = self._build_request(
+            SubscriptionCreateRequest,
             name=name,
             description=description,
             sources=sources,
@@ -252,7 +269,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        request = SubscriptionUpdateRequest(name=name, description=description)
+        request = self._build_request(SubscriptionUpdateRequest, name=name, description=description)
         response = await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}",
             json=request.model_dump(mode="json", exclude_none=True),
@@ -301,7 +318,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        request = SourceAddRequest(sources=sources)
+        request = self._build_request(SourceAddRequest, sources=sources)
         response = await self._http_client.post(
             f"/api/{__api_version__}/subs/{token}/sources",
             json=request.model_dump(mode="json"),
@@ -331,7 +348,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        request = SourceReplaceRequest(sources=sources)
+        request = self._build_request(SourceReplaceRequest, sources=sources)
         response = await self._http_client.put(
             f"/api/{__api_version__}/subs/{token}/sources",
             json=request.model_dump(mode="json"),
@@ -361,7 +378,7 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        request = SourceRemoveRequest(source_ids=source_ids)
+        request = self._build_request(SourceRemoveRequest, source_ids=source_ids)
         response = await self._http_client.request(
             "DELETE",
             f"/api/{__api_version__}/subs/{token}/sources",
@@ -369,7 +386,9 @@ class AsyncVPNClient:
         )
         return Subscription(**response.json())
 
-    @typing_extensions.deprecated('The `update_comment()` method is deprecated; use `update_source()` instead.', category=None)
+    @typing_extensions.deprecated(
+        "The `update_comment()` method is deprecated; use `update_source()` instead.", category=None
+    )
     @with_async_retry()
     async def update_comment(
         self,
@@ -394,12 +413,11 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        request = CommentUpdateRequest(config_id=config_id, comment=comment)
+        request = self._build_request(CommentUpdateRequest, config_id=config_id, comment=comment)
         await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}/comments",
             json=request.model_dump(mode="json", exclude_none=True),
         )
-
 
     @with_async_retry()
     async def update_source(
@@ -438,7 +456,13 @@ class AsyncVPNClient:
             # Only change is_hidden, leave comment and max_depth as they are
             await client.update_source(sub.token, "cfg123", is_hidden=True)
         """
-        request = SourceUpdateRequest(config_id=config_id, comment=comment, is_hidden=is_hidden, max_depth=max_depth)
+        request = self._build_request(
+            SourceUpdateRequest,
+            config_id=config_id,
+            comment=comment,
+            is_hidden=is_hidden,
+            max_depth=max_depth,
+        )
         await self._http_client.patch(
             f"/api/{__api_version__}/subs/{token}/config",
             json=request.model_dump(mode="json", exclude_none=True),

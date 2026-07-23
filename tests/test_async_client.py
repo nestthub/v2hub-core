@@ -6,7 +6,7 @@ import respx
 
 from v2hub import __api_version__
 from v2hub.async_client import AsyncVPNClient
-from v2hub.core.exceptions import NotFoundError
+from v2hub.core.exceptions import NotFoundError, ValidationError
 from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
 from v2hub.models.public import PublicSubscriptionResponse
 from v2hub.models.subscriptions import Subscription, SubscriptionListItem
@@ -50,13 +50,15 @@ class TestClientLifecycle:
 
 
 class TestListSubscriptions:
-    async def test_returns_list_of_subscription_list_items(
-        self, subscription_dict_factory
-    ):
+    async def test_returns_list_of_subscription_list_items(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             mock.get(f"/api/{__api_version__}/subs").mock(
                 return_value=httpx.Response(
-                    200, json=[subscription_dict_factory(token="t1"), subscription_dict_factory(token="t2")]
+                    200,
+                    json=[
+                        subscription_dict_factory(token="t1"),
+                        subscription_dict_factory(token="t2"),
+                    ],
                 )
             )
             async with make_client() as client:
@@ -67,9 +69,7 @@ class TestListSubscriptions:
 
     async def test_empty_list(self):
         with respx.mock(base_url=BASE_URL) as mock:
-            mock.get(f"/api/{__api_version__}/subs").mock(
-                return_value=httpx.Response(200, json=[])
-            )
+            mock.get(f"/api/{__api_version__}/subs").mock(return_value=httpx.Response(200, json=[]))
             async with make_client() as client:
                 subs = await client.list_subscriptions()
         assert subs == []
@@ -102,9 +102,7 @@ class TestCreateSubscription:
         assert payload["description"] == "desc"
         assert wire_source_data_list(payload["sources"]) == ["vless://a"]
 
-    async def test_minimal_call_no_description_no_sources(
-        self, subscription_dict_factory
-    ):
+    async def test_minimal_call_no_description_no_sources(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/subs").mock(
                 return_value=httpx.Response(201, json=subscription_dict_factory())
@@ -162,9 +160,7 @@ class TestGetSubscription:
 
 
 class TestUpdateSubscription:
-    async def test_sends_patch_with_provided_fields_only(
-        self, subscription_dict_factory
-    ):
+    async def test_sends_patch_with_provided_fields_only(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.patch(f"/api/{__api_version__}/subs/{TOKEN}").mock(
                 return_value=httpx.Response(
@@ -184,7 +180,7 @@ class TestUpdateSubscription:
         # SubscriptionUpdateRequest itself enforces "at least one field",
         # so this should fail before any HTTP call is made.
         async with make_client() as client:
-            with pytest.raises(Exception):
+            with pytest.raises(ValidationError):
                 await client.update_subscription(TOKEN)
 
 
@@ -206,9 +202,7 @@ class TestDeleteSubscription:
 
 
 class TestAddSources:
-    async def test_sends_sources_and_returns_subscription(
-        self, subscription_dict_factory
-    ):
+    async def test_sends_sources_and_returns_subscription(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/subs/{TOKEN}/sources").mock(
                 return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
@@ -225,7 +219,7 @@ class TestAddSources:
 
     async def test_empty_sources_raises_before_request(self):
         async with make_client() as client:
-            with pytest.raises(Exception):
+            with pytest.raises(ValidationError):
                 await client.add_sources(TOKEN, [])
 
 
@@ -272,7 +266,7 @@ class TestRemoveSources:
 
     async def test_empty_ids_raises_before_request(self):
         async with make_client() as client:
-            with pytest.raises(Exception):
+            with pytest.raises(ValidationError):
                 await client.remove_sources(TOKEN, [])
 
 
@@ -411,9 +405,7 @@ class TestGetPublicSubscription:
 
 
 class TestClientRetryIntegration:
-    async def test_transient_server_error_is_retried(
-        self, subscription_dict_factory, monkeypatch
-    ):
+    async def test_transient_server_error_is_retried(self, subscription_dict_factory, monkeypatch):
         import asyncio
 
         monkeypatch.setattr(asyncio, "sleep", _fast_sleep)

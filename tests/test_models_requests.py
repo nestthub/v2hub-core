@@ -18,6 +18,7 @@ via a helper, not on the literal python type/shape of the field. That way
 the next backward-compatible enhancement doesn't require rewriting every
 test that happens to touch `sources`.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -36,6 +37,7 @@ from ._helpers import get_attr_or_key, source_data_list
 
 try:
     from v2hub.models.requests import SourceUpdateRequest
+
     HAS_SOURCE_UPDATE_REQUEST = True
 except ImportError:
     HAS_SOURCE_UPDATE_REQUEST = False
@@ -81,9 +83,7 @@ class TestSubscriptionCreateRequest:
         list of source strings. This must keep working regardless of how
         the library wraps/enriches them internally.
         """
-        req = SubscriptionCreateRequest(
-            name="x", sources=["vless://a", "vless://b"]
-        )
+        req = SubscriptionCreateRequest(name="x", sources=["vless://a", "vless://b"])
         assert source_data_list(req.sources) == ["vless://a", "vless://b"]
 
     def test_sources_strip_whitespace(self):
@@ -91,9 +91,7 @@ class TestSubscriptionCreateRequest:
         assert source_data_list(req.sources) == ["vless://a"]
 
     def test_sources_dedup_preserves_order(self):
-        req = SubscriptionCreateRequest(
-            name="x", sources=["vless://a", "vless://b", "vless://a"]
-        )
+        req = SubscriptionCreateRequest(name="x", sources=["vless://a", "vless://b", "vless://a"])
         assert source_data_list(req.sources) == ["vless://a", "vless://b"]
 
     def test_sources_empty_strings_filtered(self):
@@ -110,9 +108,7 @@ class TestSubscriptionCreateRequest:
         the source data itself must survive a model_dump() -> the caller
         should be able to find "vless://a" in the dumped payload somehow.
         """
-        req = SubscriptionCreateRequest(
-            name="x", description="d", sources=["vless://a"]
-        )
+        req = SubscriptionCreateRequest(name="x", description="d", sources=["vless://a"])
         dumped = req.model_dump(mode="json")
         assert dumped["name"] == "x"
         assert dumped["description"] == "d"
@@ -348,9 +344,7 @@ class TestCommentUpdateRequest:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             CommentUpdateRequest(config_id="cfg1", comment="hi")
-        deprecation_warnings = [
-            w for w in caught if issubclass(w.category, DeprecationWarning)
-        ]
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
         if not deprecation_warnings:
             pytest.skip(
                 "This version of CommentUpdateRequest does not emit a "
@@ -399,9 +393,7 @@ class TestSourceUpdateRequest:
         assert dumped == {"config_id": "cfg1", "is_hidden": True}
 
     def test_all_fields_together(self):
-        req = SourceUpdateRequest(
-            config_id="cfg1", comment="hi", is_hidden=False, max_depth=1
-        )
+        req = SourceUpdateRequest(config_id="cfg1", comment="hi", is_hidden=False, max_depth=1)
         dumped = req.model_dump(mode="json", exclude_none=True)
         assert dumped == {
             "config_id": "cfg1",

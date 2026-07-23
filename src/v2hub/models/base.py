@@ -16,4 +16,3 @@ class BaseModelConfig(BaseModel):
         str_strip_whitespace=True,
         populate_by_name=True,
     )
-

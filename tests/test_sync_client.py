@@ -63,9 +63,7 @@ class TestSyncClientDelegation:
         """
         with respx.mock(base_url=BASE_URL, assert_all_called=False) as mock:
             mock.post(f"/api/{__api_version__}/subs").mock(
-                return_value=httpx.Response(
-                    201, json=subscription_dict_factory(name="sync-sub")
-                )
+                return_value=httpx.Response(201, json=subscription_dict_factory(name="sync-sub"))
             )
             with make_client() as client:
                 try:
@@ -79,9 +77,7 @@ class TestSyncClientDelegation:
                 else:
                     assert sub.name == "sync-sub"
 
-    def test_create_subscription_with_explicit_sources_works(
-        self, subscription_dict_factory
-    ):
+    def test_create_subscription_with_explicit_sources_works(self, subscription_dict_factory):
         """Passing sources explicitly always works, bug or no bug."""
         with respx.mock(base_url=BASE_URL) as mock:
             mock.post(f"/api/{__api_version__}/subs").mock(
@@ -187,9 +183,7 @@ class TestSyncClientDelegation:
 
 
 class TestSyncClientWithoutContextManager:
-    def test_run_without_entering_context_uses_asyncio_run(
-        self, subscription_dict_factory
-    ):
+    def test_run_without_entering_context_uses_asyncio_run(self, subscription_dict_factory):
         """
         _run() falls back to asyncio.run() when not used as a context
         manager. Each call creates and tears down its own event loop, so

@@ -61,6 +61,7 @@ class TestRetryConfigCalculateDelay:
         from v2hub.core.exceptions import (
             TimeoutError as TOE,
         )
+
         assert cfg.retryable_exceptions == (TOE, SE, SUE, RLE)
 
 

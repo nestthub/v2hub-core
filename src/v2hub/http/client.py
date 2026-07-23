@@ -62,7 +62,7 @@ class Middleware:
 
     async def __call__(
         self,
-        context: RequestContext,
+        _context: RequestContext,
         call_next: Callable[[], Any],
     ) -> httpx.Response:
         """

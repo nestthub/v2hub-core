@@ -6,7 +6,10 @@ remain importable after an update. If a name is intentionally removed or
 renamed as part of the update, this test should be updated deliberately
 (not silently broken) so the change is visible in the diff/changelog.
 """
+
 from __future__ import annotations
+
+from typing import ClassVar
 
 import v2hub
 
@@ -99,7 +102,7 @@ class TestAsyncVPNClientMethodSurface:
     test will catch.
     """
 
-    EXPECTED_METHODS = {
+    EXPECTED_METHODS: ClassVar[set[str]] = {
         "list_subscriptions",
         "create_subscription",
         "get_subscription",
@@ -129,7 +132,7 @@ class TestAsyncVPNClientMethodSurface:
 
 
 class TestVPNClientMethodSurface:
-    EXPECTED_METHODS = {
+    EXPECTED_METHODS: ClassVar[set[str]] = {
         "list_subscriptions",
         "create_subscription",
         "get_subscription",

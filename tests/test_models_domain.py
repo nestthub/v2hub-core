@@ -131,9 +131,7 @@ class TestSubscription:
         with pytest.raises(PydanticValidationError):
             Subscription(**d)
 
-    def test_subscription_list_item_is_subscription_subclass(
-        self, subscription_dict_factory
-    ):
+    def test_subscription_list_item_is_subscription_subclass(self, subscription_dict_factory):
         item = SubscriptionListItem(**subscription_dict_factory())
         assert isinstance(item, Subscription)
 
@@ -223,7 +221,5 @@ class TestErrorResponse:
             ErrorResponse(error="only_error")
 
     def test_details_optional_dict(self):
-        err = ErrorResponse(
-            error="validation_error", message="bad", details={"field": "name"}
-        )
+        err = ErrorResponse(error="validation_error", message="bad", details={"field": "name"})
         assert err.details == {"field": "name"}

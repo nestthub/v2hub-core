@@ -15,7 +15,9 @@ from .base import BaseModelConfig
 class PublicSubscriptionResponse(BaseModelConfig):
     """Response from public subscription endpoint (base64 encoded configs)."""
 
-    title: Annotated[str | None, Field(default="v2hub", description="Base64-encoded subscription title")] = "v2hub"
+    title: Annotated[
+        str | None, Field(default="v2hub", description="Base64-encoded subscription title")
+    ] = "v2hub"
     content: Annotated[str, Field(description="Base64-encoded subscription content")]
 
     def decode(self) -> str:
