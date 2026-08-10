@@ -5,11 +5,19 @@ import base64
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from v2hub.models.enums import SourceType
-from v2hub.models.public import PublicSubscriptionResponse
-from v2hub.models.responses import ErrorResponse, RefreshSubscriptionResponse
-from v2hub.models.sources import Source
-from v2hub.models.subscriptions import Subscription, SubscriptionListItem
+from v2hub.models import (
+    ErrorResponse,
+    ProviderAuthorizationStatus,
+    ProviderConnectionDeleteResponse,
+    ProviderConnectionRequest,
+    ProviderConnectionResponse,
+    PublicSubscriptionResponse,
+    RefreshSubscriptionResponse,
+    Source,
+    SourceType,
+    Subscription,
+    SubscriptionListItem,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SourceType
@@ -135,6 +143,64 @@ class TestSubscription:
         item = SubscriptionListItem(**subscription_dict_factory())
         assert isinstance(item, Subscription)
 
+    # ─────────────────────── provider_name ───────────────────────
+
+    def test_provider_name_defaults_to_none(self, subscription_dict_factory):
+        """
+        Self-service subscription responses don't carry a provider_name
+        at all -- the field must default to None rather than being
+        required, so existing (pre-provider) server responses keep
+        deserializing exactly as before.
+        """
+        d = subscription_dict_factory()
+        assert "provider_name" not in d or d["provider_name"] is None
+        sub = Subscription(**d)
+        assert sub.provider_name is None
+
+    def test_provider_name_omitted_entirely_from_payload(self, subscription_dict_factory):
+        """
+        Backward compatibility: a server response that doesn't include the
+        provider_name key at all (e.g. an old server version) must still
+        deserialize successfully, with provider_name defaulting to None.
+        """
+        d = subscription_dict_factory()
+        del d["provider_name"]
+        sub = Subscription(**d)
+        assert sub.provider_name is None
+
+    def test_provider_name_deserializes_when_present(self, subscription_dict_factory):
+        d = subscription_dict_factory(provider_name="Acme VPN Co")
+        sub = Subscription(**d)
+        assert sub.provider_name == "Acme VPN Co"
+
+    def test_provider_name_explicit_null_deserializes_to_none(self, subscription_dict_factory):
+        d = subscription_dict_factory(provider_name=None)
+        sub = Subscription(**d)
+        assert sub.provider_name is None
+
+    def test_provider_name_round_trips_through_json(self, subscription_dict_factory):
+        d = subscription_dict_factory(provider_name="Acme VPN Co")
+        sub = Subscription(**d)
+        assert sub.model_dump(mode="json")["provider_name"] == "Acme VPN Co"
+
+    def test_subscription_list_item_deserializes_provider_name(self, subscription_dict_factory):
+        """provider_name must work identically on SubscriptionListItem, not just Subscription."""
+        d = subscription_dict_factory(provider_name="Acme VPN Co")
+        item = SubscriptionListItem(**d)
+        assert item.provider_name == "Acme VPN Co"
+
+    def test_provider_name_does_not_affect_other_fields(self, subscription_dict_factory):
+        """
+        Setting provider_name must not interfere with normal self-service
+        field deserialization (sources, counts, etc.) -- a provider-managed
+        subscription is otherwise identical in shape to a self-service one.
+        """
+        d = subscription_dict_factory(provider_name="Acme VPN Co", name="customer-vpn")
+        sub = Subscription(**d)
+        assert sub.name == "customer-vpn"
+        assert sub.provider_name == "Acme VPN Co"
+        assert len(sub.sources) == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PublicSubscriptionResponse
@@ -223,3 +289,106 @@ class TestErrorResponse:
     def test_details_optional_dict(self):
         err = ErrorResponse(error="validation_error", message="bad", details={"field": "name"})
         assert err.details == {"field": "name"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ProviderAuthorizationStatus
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestProviderAuthorizationStatus:
+    def test_values(self):
+        assert ProviderAuthorizationStatus.APPROVED == "approved"
+        assert ProviderAuthorizationStatus.REVOKED == "revoked"
+
+    def test_str_equality_with_plain_string(self):
+        """
+        The enum must compare equal to (and be interchangeable with) plain
+        strings on the wire, regardless of whether it's implemented as
+        StrEnum or `class X(str, Enum)` -- this is what callers actually
+        rely on, not the exact repr.
+        """
+        assert ProviderAuthorizationStatus.APPROVED == "approved"
+        assert ProviderAuthorizationStatus("approved") is ProviderAuthorizationStatus.APPROVED
+
+    def test_invalid_value_raises(self):
+        with pytest.raises(ValueError):
+            ProviderAuthorizationStatus("pending")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ProviderConnectionRequest
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestProviderConnectionRequest:
+    def test_valid_user_id(self):
+        req = ProviderConnectionRequest(user_id=123)
+        assert req.user_id == 123
+
+    def test_user_id_must_be_positive(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionRequest(user_id=0)
+
+    def test_user_id_rejects_negative(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionRequest(user_id=-5)
+
+    def test_user_id_required(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionRequest()
+
+    def test_serializes_to_json(self):
+        req = ProviderConnectionRequest(user_id=42)
+        assert req.model_dump(mode="json") == {"user_id": 42}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ProviderConnectionResponse
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestProviderConnectionResponse:
+    def test_basic_construction(self):
+        resp = ProviderConnectionResponse(user_id=7, status=ProviderAuthorizationStatus.APPROVED)
+        assert resp.user_id == 7
+        assert resp.status == ProviderAuthorizationStatus.APPROVED
+
+    def test_accepts_plain_string_status(self):
+        """Wire responses deliver status as a plain JSON string, not an enum instance."""
+        resp = ProviderConnectionResponse(user_id=7, status="revoked")
+        assert resp.status == ProviderAuthorizationStatus.REVOKED
+
+    def test_invalid_status_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionResponse(user_id=7, status="pending")
+
+    def test_serializes_status_as_plain_string(self):
+        """
+        Round-tripping through JSON must produce the bare string value
+        ("approved"), not the enum's qualified repr -- this is what the
+        server expects to receive back and what other clients expect to read.
+        """
+        resp = ProviderConnectionResponse(user_id=7, status=ProviderAuthorizationStatus.APPROVED)
+        assert resp.model_dump(mode="json") == {"user_id": 7, "status": "approved"}
+
+    def test_missing_fields_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionResponse(user_id=7)
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionResponse(status=ProviderAuthorizationStatus.APPROVED)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ProviderConnectionDeleteResponse
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestProviderConnectionDeleteResponse:
+    def test_basic_construction(self):
+        resp = ProviderConnectionDeleteResponse(detail="Provider connection deleted")
+        assert resp.detail == "Provider connection deleted"
+
+    def test_detail_required(self):
+        with pytest.raises(PydanticValidationError):
+            ProviderConnectionDeleteResponse()

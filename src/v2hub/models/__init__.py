@@ -9,13 +9,19 @@ from __future__ import annotations
 __all__ = [
     "CommentUpdateRequest",
     "ErrorResponse",
+    "ProviderAuthorizationStatus",
+    "ProviderConnectionDeleteResponse",
+    "ProviderConnectionRequest",
+    "ProviderConnectionResponse",
     "PublicSubscriptionResponse",
     "RefreshSubscriptionResponse",
     "Source",
     "SourceAddRequest",
+    "SourceCreate",
     "SourceRemoveRequest",
     "SourceReplaceRequest",
     "SourceType",
+    "SourceUpdateRequest",
     "Subscription",
     "SubscriptionCreateRequest",
     "SubscriptionListItem",
@@ -24,18 +30,29 @@ __all__ = [
 
 
 from .enums import SourceType
+from .errors import (
+    ErrorResponse,
+)
+from .providers import (
+    ProviderAuthorizationStatus,
+    ProviderConnectionDeleteResponse,
+    ProviderConnectionRequest,
+    ProviderConnectionResponse,
+)
 from .public import PublicSubscriptionResponse
-from .requests import (
+from .sources import (
     CommentUpdateRequest,
+    Source,
     SourceAddRequest,
+    SourceCreate,
     SourceRemoveRequest,
     SourceReplaceRequest,
+    SourceUpdateRequest,
+)
+from .subscriptions import (
+    RefreshSubscriptionResponse,
+    Subscription,
     SubscriptionCreateRequest,
+    SubscriptionListItem,
     SubscriptionUpdateRequest,
 )
-from .responses import (
-    ErrorResponse,
-    RefreshSubscriptionResponse,
-)
-from .sources import Source
-from .subscriptions import Subscription, SubscriptionListItem

@@ -24,7 +24,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from v2hub.models.requests import (
+from v2hub.models import (
     CommentUpdateRequest,
     SourceAddRequest,
     SourceRemoveRequest,
@@ -36,7 +36,7 @@ from v2hub.models.requests import (
 from ._helpers import get_attr_or_key, source_data_list
 
 try:
-    from v2hub.models.requests import SourceUpdateRequest
+    from v2hub.models import SourceUpdateRequest
 
     HAS_SOURCE_UPDATE_REQUEST = True
 except ImportError:
