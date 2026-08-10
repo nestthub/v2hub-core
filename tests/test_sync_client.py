@@ -96,15 +96,6 @@ class TestSyncClientDelegation:
                 sub = client.get_subscription(TOKEN)
         assert sub.token == TOKEN
 
-    def test_get_subscription_by_name(self, subscription_dict_factory):
-        with respx.mock(base_url=BASE_URL) as mock:
-            mock.get(f"/api/{__api_version__}/subs/by-name/n").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(name="n"))
-            )
-            with make_client() as client:
-                sub = client.get_subscription_by_name("n")
-        assert sub.name == "n"
-
     def test_update_subscription(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             mock.patch(f"/api/{__api_version__}/subs/{TOKEN}").mock(

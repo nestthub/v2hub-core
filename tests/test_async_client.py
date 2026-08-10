@@ -8,8 +8,11 @@ from v2hub import __api_version__
 from v2hub.async_client import AsyncVPNClient
 from v2hub.core.exceptions import NotFoundError, ValidationError
 from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
-from v2hub.models.public import PublicSubscriptionResponse
-from v2hub.models.subscriptions import Subscription, SubscriptionListItem
+from v2hub.models import (
+    PublicSubscriptionResponse,
+    Subscription,
+    SubscriptionListItem,
+)
 
 from ._helpers import wire_source_data_list
 
@@ -148,15 +151,6 @@ class TestGetSubscription:
             async with make_client() as client:
                 with pytest.raises(NotFoundError):
                     await client.get_subscription("missing")
-
-    async def test_by_name(self, subscription_dict_factory):
-        with respx.mock(base_url=BASE_URL) as mock:
-            mock.get(f"/api/{__api_version__}/subs/by-name/my-vpn").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(name="my-vpn"))
-            )
-            async with make_client() as client:
-                sub = await client.get_subscription_by_name("my-vpn")
-        assert sub.name == "my-vpn"
 
 
 class TestUpdateSubscription:

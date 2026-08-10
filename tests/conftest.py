@@ -39,6 +39,7 @@ def make_subscription_dict(
     token: str = "sub-token-abc",
     name: str = "My VPN",
     description: str | None = None,
+    provider_name: str | None = None,
     sources: list | None = None,
     sources_count: int | None = None,
 ) -> dict:
@@ -48,6 +49,7 @@ def make_subscription_dict(
         "token": token,
         "name": name,
         "description": description,
+        "provider_name": provider_name,
         "sources": sources,
         "sources_count": sources_count if sources_count is not None else len(sources),
         "created_at": now,

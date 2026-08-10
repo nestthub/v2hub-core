@@ -13,19 +13,21 @@ from typing import Any, TypeVar
 import typing_extensions
 from pydantic import ValidationError as PydanticValidationError
 
+from v2hub import __api_version__
 from v2hub.core.exceptions import ValidationError, VPNAPIError
-from v2hub.models.requests import SourceCreate, SourceUpdateRequest
-
-from . import __api_version__
-from .core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, with_async_retry
-from .http.client import HTTPClient
-from .models import (
+from v2hub.core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, with_async_retry
+from v2hub.http.client import HTTPClient
+from v2hub.models import (
     CommentUpdateRequest,
+    ProviderConnectionDeleteResponse,
+    ProviderConnectionResponse,
     PublicSubscriptionResponse,
     RefreshSubscriptionResponse,
     SourceAddRequest,
+    SourceCreate,
     SourceRemoveRequest,
     SourceReplaceRequest,
+    SourceUpdateRequest,
     Subscription,
     SubscriptionCreateRequest,
     SubscriptionListItem,
@@ -56,16 +58,44 @@ class AsyncVPNClient:
     - Comprehensive error handling
     - Request/response logging
 
-    Example:
-        async with AsyncVPNClient("https://api.example.com", "token") as client:
-            # Create subscription
-            sub = await client.create_subscription("my-vpn")
+    Every subscription/source method accepts an optional, keyword-only
+    `as_provider_for_user_id` argument:
+    - omitted (None, the default) -> normal self-service call, for the
+      account that owns `api_token`. Hits ``/api/{version}/subs/...``.
+    - provided -> `api_token` acts as a PROVIDER managing subscriptions
+      on behalf of the end-user whose ID is given. Hits
+      ``/api/{version}/providers/{as_provider_for_user_id}/subs/...`` and
+      requires `api_token` to belong to a provider account.
 
-            # Add sources
+    The parameter is intentionally verbose and keyword-only (not just
+    `user_id`) so it can't be passed positionally or confused with some
+    other ID by a developer skimming the call — passing it always means
+    "act as a provider for this specific end-user", never "the current
+    user" or anything else.
+
+    A single client instance/connection is enough to act both as a normal
+    self-service user and as a provider managing any number of end-users —
+    just pass `as_provider_for_user_id` on the calls that need it.
+
+    Note: a provider must first have an APPROVED connection to a given
+    user_id (see the "Provider Connection Management" methods below,
+    e.g. `create_provider_connection()`) before any
+    `as_provider_for_user_id=` subscription call for that user_id will
+    succeed.
+
+    Example (self-service — the common case, nothing provider-related):
+        async with AsyncVPNClient("https://api.example.com", "token") as client:
+            sub = await client.create_subscription("my-vpn")
             await client.add_sources(sub.token, ["vless://..."])
 
-            # Get subscription
-            sub = await client.get_subscription(sub.token)
+    Example (provider managing multiple end-users with one client):
+        async with AsyncVPNClient("https://api.example.com", "provider-token") as client:
+            await client.create_provider_connection(123)  # establish authorization first
+            sub1 = await client.create_subscription("vpn", as_provider_for_user_id=123)
+            sub2 = await client.create_subscription("vpn", as_provider_for_user_id=456)
+            await client.add_sources(
+                sub1.token, ["vless://..."], as_provider_for_user_id=123
+            )
     """
 
     def __init__(
@@ -105,6 +135,21 @@ class AsyncVPNClient:
         self._circuit_breaker = CircuitBreaker(self.circuit_breaker_config)
 
     @staticmethod
+    def _subs_path(as_provider_for_user_id: int | None) -> str:
+        """
+        Base path for subscription endpoints.
+
+        Args:
+            as_provider_for_user_id: None for the self-service path
+                (``/subs``). Otherwise, the end-user ID to manage as a
+                provider, giving the provider-scoped path
+                (``/providers/{id}/subs``).
+        """
+        if as_provider_for_user_id is not None:
+            return f"/api/{__api_version__}/providers/{as_provider_for_user_id}/subs"
+        return f"/api/{__api_version__}/subs"
+
+    @staticmethod
     def _build_request(model_cls: type[T], /, **kwargs: Any) -> T:
         """
         Construct a pydantic request model, mapping validation errors to v2hub.ValidationError.
@@ -140,9 +185,18 @@ class AsyncVPNClient:
     # ═══════════════════════════════════════════════════════════════════════
 
     @with_async_retry()
-    async def list_subscriptions(self) -> list[SubscriptionListItem]:
+    async def list_subscriptions(
+        self, *, as_provider_for_user_id: int | None = None
+    ) -> list[SubscriptionListItem]:
         """
         List all subscriptions.
+
+        Args:
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset for
+                normal self-service (lists the caller's own subscriptions).
+                Set to an end-user's numeric user_id to instead list that end-user's
+                subscriptions, acting as a provider on their behalf
+                (requires a provider API token).
 
         Returns:
             List of subscriptions
@@ -156,7 +210,7 @@ class AsyncVPNClient:
             for sub in subs:
                 print(f"{sub.name}: {sub.sources_count} configs")
         """
-        response = await self._http_client.get(f"/api/{__api_version__}/subs")
+        response = await self._http_client.get(self._subs_path(as_provider_for_user_id))
         data = response.json()
         return [SubscriptionListItem(**item) for item in data]
 
@@ -166,6 +220,8 @@ class AsyncVPNClient:
         name: str,
         description: str | None = None,
         sources: list[SourceCreate] | None = None,
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> Subscription:
         """
         Create a new subscription.
@@ -174,6 +230,11 @@ class AsyncVPNClient:
             name: Subscription name (1-64 chars)
             description: Optional description (max 255 chars)
             sources: Optional initial sources
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to
+                create the subscription for the caller's own account.
+                Set to an end-user's numeric user_id to instead create it on that
+                end-user's behalf, acting as a provider (requires a
+                provider API token).
 
         Returns:
             Created subscription
@@ -201,18 +262,23 @@ class AsyncVPNClient:
             sources=sources,
         )
         response = await self._http_client.post(
-            f"/api/{__api_version__}/subs",
+            self._subs_path(as_provider_for_user_id),
             json=request.model_dump(mode="json", exclude_none=True),
         )
         return Subscription(**response.json())
 
     @with_async_retry()
-    async def get_subscription(self, token: str) -> Subscription:
+    async def get_subscription(
+        self, token: str, *, as_provider_for_user_id: int | None = None
+    ) -> Subscription:
         """
         Get subscription by token.
 
         Args:
             token: Subscription token
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset for
+                normal self-service lookup. Set to an end-user's numeric user_id to
+                look up their subscription as a provider on their behalf.
 
         Returns:
             Subscription details
@@ -222,26 +288,9 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        response = await self._http_client.get(f"/api/{__api_version__}/subs/{token}")
-        return Subscription(**response.json())
-
-    @with_async_retry()
-    async def get_subscription_by_name(self, name: str) -> Subscription:
-        """
-        Get subscription by name.
-
-        Args:
-            name: Subscription name
-
-        Returns:
-            Subscription details
-
-        Raises:
-            SubscriptionNotFoundError: Subscription not found
-            AuthenticationError: Invalid API token
-            VPNAPIError: Other API errors
-        """
-        response = await self._http_client.get(f"/api/{__api_version__}/subs/by-name/{name}")
+        response = await self._http_client.get(
+            f"{self._subs_path(as_provider_for_user_id)}/{token}"
+        )
         return Subscription(**response.json())
 
     @with_async_retry()
@@ -250,6 +299,8 @@ class AsyncVPNClient:
         token: str,
         name: str | None = None,
         description: str | None = None,
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> Subscription:
         """
         Update subscription metadata.
@@ -258,6 +309,9 @@ class AsyncVPNClient:
             token: Subscription token
             name: New name (optional)
             description: New description (optional)
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to
+                update the caller's own subscription. Set to an end-user's
+                ID to update their subscription as a provider on their behalf.
 
         Returns:
             Updated subscription
@@ -271,25 +325,30 @@ class AsyncVPNClient:
         """
         request = self._build_request(SubscriptionUpdateRequest, name=name, description=description)
         response = await self._http_client.patch(
-            f"/api/{__api_version__}/subs/{token}",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}",
             json=request.model_dump(mode="json", exclude_none=True),
         )
         return Subscription(**response.json())
 
     @with_async_retry()
-    async def delete_subscription(self, token: str) -> None:
+    async def delete_subscription(
+        self, token: str, *, as_provider_for_user_id: int | None = None
+    ) -> None:
         """
         Delete subscription.
 
         Args:
             token: Subscription token
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to
+                delete the caller's own subscription. Set to an end-user's
+                ID to delete their subscription as a provider on their behalf.
 
         Raises:
             SubscriptionNotFoundError: Subscription not found
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        await self._http_client.delete(f"/api/{__api_version__}/subs/{token}")
+        await self._http_client.delete(f"{self._subs_path(as_provider_for_user_id)}/{token}")
 
     # ═══════════════════════════════════════════════════════════════════════
     # Source Management
@@ -300,6 +359,8 @@ class AsyncVPNClient:
         self,
         token: str,
         sources: list[SourceCreate],
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> Subscription:
         """
         Add sources to subscription.
@@ -307,6 +368,9 @@ class AsyncVPNClient:
         Args:
             token: Subscription token
             sources: List of sources to add (configs or URLs)
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Returns:
             Updated subscription
@@ -320,7 +384,7 @@ class AsyncVPNClient:
         """
         request = self._build_request(SourceAddRequest, sources=sources)
         response = await self._http_client.post(
-            f"/api/{__api_version__}/subs/{token}/sources",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -330,6 +394,8 @@ class AsyncVPNClient:
         self,
         token: str,
         sources: list[SourceCreate],
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> Subscription:
         """
         Replace all sources in subscription.
@@ -337,6 +403,9 @@ class AsyncVPNClient:
         Args:
             token: Subscription token
             sources: New list of sources (replaces all existing)
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Returns:
             Updated subscription
@@ -350,7 +419,7 @@ class AsyncVPNClient:
         """
         request = self._build_request(SourceReplaceRequest, sources=sources)
         response = await self._http_client.put(
-            f"/api/{__api_version__}/subs/{token}/sources",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -360,6 +429,8 @@ class AsyncVPNClient:
         self,
         token: str,
         source_ids: list[str],
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> Subscription:
         """
         Remove specific sources from subscription.
@@ -367,6 +438,9 @@ class AsyncVPNClient:
         Args:
             token: Subscription token
             source_ids: List of source IDs to remove
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Returns:
             Updated subscription
@@ -381,7 +455,7 @@ class AsyncVPNClient:
         request = self._build_request(SourceRemoveRequest, source_ids=source_ids)
         response = await self._http_client.request(
             "DELETE",
-            f"/api/{__api_version__}/subs/{token}/sources",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/sources",
             json=request.model_dump(mode="json"),
         )
         return Subscription(**response.json())
@@ -395,17 +469,21 @@ class AsyncVPNClient:
         token: str,
         config_id: str,
         comment: str | None,
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> None:
         """
         Update comment for a specific config.
+
+        Deprecated: use `update_source()` instead.
 
         Args:
             token: Subscription token
             config_id: Config id
             comment: Comment text (None to remove)
-
-        Returns:
-            Updated subscription
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Raises:
             SubscriptionNotFoundError: Subscription not found
@@ -415,7 +493,7 @@ class AsyncVPNClient:
         """
         request = self._build_request(CommentUpdateRequest, config_id=config_id, comment=comment)
         await self._http_client.patch(
-            f"/api/{__api_version__}/subs/{token}/comments",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/comments",
             json=request.model_dump(mode="json", exclude_none=True),
         )
 
@@ -427,6 +505,8 @@ class AsyncVPNClient:
         comment: str | None = None,
         is_hidden: bool | None = None,
         max_depth: int | None = None,
+        *,
+        as_provider_for_user_id: int | None = None,
     ) -> None:
         """
         Partially update a source's settings within a subscription.
@@ -442,6 +522,9 @@ class AsyncVPNClient:
             comment: New comment text, or None to leave unchanged.
             is_hidden: New hidden state, or None to leave unchanged.
             max_depth: New max nesting depth (0-3), or None to leave unchanged.
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Returns:
             Updated subscription.
@@ -464,7 +547,7 @@ class AsyncVPNClient:
             max_depth=max_depth,
         )
         await self._http_client.patch(
-            f"/api/{__api_version__}/subs/{token}/config",
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/config",
             json=request.model_dump(mode="json", exclude_none=True),
         )
 
@@ -473,12 +556,17 @@ class AsyncVPNClient:
     # ═══════════════════════════════════════════════════════════════════════
 
     @with_async_retry()
-    async def refresh_subscription(self, token: str) -> RefreshSubscriptionResponse:
+    async def refresh_subscription(
+        self, token: str, *, as_provider_for_user_id: int | None = None
+    ) -> RefreshSubscriptionResponse:
         """
         Manually refresh external URL sources.
 
         Args:
             token: Subscription token
+            as_provider_for_user_id: PROVIDER USE ONLY. Leave unset to act
+                on the caller's own subscription. Set to an end-user's numeric user_id
+                to act as a provider on their behalf.
 
         Returns:
             Refresh result with statistics
@@ -488,8 +576,111 @@ class AsyncVPNClient:
             AuthenticationError: Invalid API token
             VPNAPIError: Other API errors
         """
-        response = await self._http_client.post(f"/api/{__api_version__}/subs/{token}/refresh")
+        response = await self._http_client.post(
+            f"{self._subs_path(as_provider_for_user_id)}/{token}/refresh"
+        )
         return RefreshSubscriptionResponse(**response.json())
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Provider Connection Management
+    # ═══════════════════════════════════════════════════════════════════════
+    #
+    # These manage the authorization link between a provider and an
+    # end-user (approve/check/revoke/delete access) — separate from, and a
+    # prerequisite for, the `as_provider_for_user_id=` subscription/source
+    # calls above. Until a connection exists and is APPROVED for a given
+    # user_id, provider-mode subscription calls for that user_id will fail
+    # server-side (403/404), regardless of how they're called here.
+    #
+    # `api_token` must belong to a provider account for all of these.
+
+    @with_async_retry()
+    async def get_provider_connection(self, user_id: int) -> ProviderConnectionResponse:
+        """
+        Get the current authorization status between this provider and a user.
+
+        Args:
+            user_id: The end-user's numeric ID.
+
+        Returns:
+            Current connection status (e.g. pending/approved/revoked).
+
+        Raises:
+            AuthenticationError: Invalid API token, or user not found.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.get(f"/api/{__api_version__}/providers/{user_id}")
+        return ProviderConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def create_provider_connection(self, user_id: int) -> ProviderConnectionResponse:
+        """
+        Create (or re-request) an authorization connection to a user.
+
+        Currently auto-approves rather than waiting on user confirmation —
+        see the server's own docs/changelog for the current behavior, since
+        this is documented server-side as a temporary/evolving flow. Once
+        approved, this provider can manage the user's subscriptions via the
+        `as_provider_for_user_id=user_id` argument on subscription/source
+        methods.
+
+        Args:
+            user_id: The end-user's numeric ID. If no account exists yet
+                for this ID, one is created.
+
+        Returns:
+            The resulting connection status.
+
+        Raises:
+            TooManyApprovedUsersError: Provider's approved-user quota reached.
+            AuthenticationError: Invalid API token.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.post(f"/api/{__api_version__}/providers/{user_id}")
+        return ProviderConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def revoke_provider_connection(self, user_id: int) -> ProviderConnectionResponse:
+        """
+        Revoke this provider's authorization for a user, without deleting
+        the connection record. A revoked connection can be re-approved by
+        calling `create_provider_connection()` again.
+
+        Args:
+            user_id: The end-user's numeric ID.
+
+        Returns:
+            The resulting connection status (REVOKED).
+
+        Raises:
+            AuthenticationError: No existing authorization to revoke.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.post(
+            f"/api/{__api_version__}/providers/{user_id}/revoke"
+        )
+        return ProviderConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def delete_provider_connection(self, user_id: int) -> ProviderConnectionDeleteResponse:
+        """
+        Permanently remove the authorization connection record to a user.
+
+        Unlike `revoke_provider_connection()`, this deletes the record
+        entirely rather than just marking it revoked.
+
+        Args:
+            user_id: The end-user's numeric ID.
+
+        Returns:
+            Confirmation of deletion.
+
+        Raises:
+            AuthenticationError: Invalid API token.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.delete(f"/api/{__api_version__}/providers/{user_id}")
+        return ProviderConnectionDeleteResponse(**response.json())
 
     # ═══════════════════════════════════════════════════════════════════════
     # Public Endpoints (No Auth Required)
