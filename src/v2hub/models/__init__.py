@@ -10,6 +10,7 @@ __all__ = [
     "CommentUpdateRequest",
     "ErrorResponse",
     "ProviderAuthorizationStatus",
+    "ProviderConnectionCreateResponse",
     "ProviderConnectionDeleteResponse",
     "ProviderConnectionRequest",
     "ProviderConnectionResponse",
@@ -35,6 +36,7 @@ from .errors import (
 )
 from .providers import (
     ProviderAuthorizationStatus,
+    ProviderConnectionCreateResponse,
     ProviderConnectionDeleteResponse,
     ProviderConnectionRequest,
     ProviderConnectionResponse,

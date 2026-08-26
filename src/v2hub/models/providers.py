@@ -10,7 +10,14 @@ from .base import BaseModelConfig
 
 class ProviderAuthorizationStatus(str, Enum):
     APPROVED = "approved"
+    PENDING = "pending"
     REVOKED = "revoked"
+
+    @classmethod
+    def _missing_(cls, value: object) -> str:  # noqa: ARG003
+        return cls.UNKNOWN
+
+    UNKNOWN = "unknown"
 
 
 class ProviderConnectionRequest(BaseModelConfig):
@@ -36,6 +43,12 @@ class ProviderConnectionResponse(BaseModelConfig):
         ProviderAuthorizationStatus,
         Field(description="Authorization status"),
     ]
+
+
+class ProviderConnectionCreateResponse(ProviderConnectionResponse):
+    connection_link: str | None = Field(
+        description="Provider connection link",
+    )
 
 
 class ProviderConnectionDeleteResponse(BaseModelConfig):

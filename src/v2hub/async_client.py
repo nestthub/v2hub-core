@@ -19,6 +19,7 @@ from v2hub.core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, 
 from v2hub.http.client import HTTPClient
 from v2hub.models import (
     CommentUpdateRequest,
+    ProviderConnectionCreateResponse,
     ProviderConnectionDeleteResponse,
     ProviderConnectionResponse,
     PublicSubscriptionResponse,
@@ -613,7 +614,7 @@ class AsyncVPNClient:
         return ProviderConnectionResponse(**response.json())
 
     @with_async_retry()
-    async def create_provider_connection(self, user_id: int) -> ProviderConnectionResponse:
+    async def create_provider_connection(self, user_id: int) -> ProviderConnectionCreateResponse:
         """
         Create (or re-request) an authorization connection to a user.
 
@@ -637,7 +638,7 @@ class AsyncVPNClient:
             VPNAPIError: Other API errors.
         """
         response = await self._http_client.post(f"/api/{__api_version__}/providers/{user_id}")
-        return ProviderConnectionResponse(**response.json())
+        return ProviderConnectionCreateResponse(**response.json())
 
     @with_async_retry()
     async def revoke_provider_connection(self, user_id: int) -> ProviderConnectionResponse:

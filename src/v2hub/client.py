@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
     from v2hub.models import (
+        ProviderConnectionCreateResponse,
         ProviderConnectionDeleteResponse,
         ProviderConnectionResponse,
         PublicSubscriptionResponse,
@@ -404,7 +405,7 @@ class VPNClient:
         """Get the current authorization status between this provider and a user."""
         return self._run(self._async_client.get_provider_connection(user_id))
 
-    def create_provider_connection(self, user_id: int) -> ProviderConnectionResponse:
+    def create_provider_connection(self, user_id: int) -> ProviderConnectionCreateResponse:
         """
         Create (or re-request) an authorization connection to a user.
 

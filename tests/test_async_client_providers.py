@@ -37,64 +37,125 @@ def self_prefix() -> str:
     return f"/api/{__api_version__}/subs"
 
 
+def provider_connection_response(
+    user_id: int,
+    *,
+    status: str = "pending",
+) -> dict:
+    return {
+        "user_id": user_id,
+        "status": status,
+    }
+
+
+def provider_connection_create_response(
+    user_id: int,
+    *,
+    status: str = "pending",
+    connection_link: str | None = "https://t.me/v2hubot?start=provider_vpn123",
+) -> dict:
+    return {
+        "user_id": user_id,
+        "status": status,
+        "connection_link": connection_link,
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Path routing: default (self-service) vs. as_provider_for_user_id set
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class TestProviderPathRouting:
-    async def test_default_is_self_service_path_not_provider_path(self, subscription_dict_factory):
-        """Omitting as_provider_for_user_id must never touch /providers/...">"""
+    async def test_default_is_self_service_path_not_provider_path(
+        self,
+        subscription_dict_factory,
+    ):
+        """Omitting as_provider_for_user_id must never touch /providers/..."""
         with respx.mock(base_url=BASE_URL) as mock:
             self_route = mock.get(self_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
             async with make_client() as client:
                 await client.list_subscriptions()
+
         assert self_route.called
 
     async def test_as_provider_for_user_id_none_explicit_uses_self_service_path(
-        self, subscription_dict_factory
+        self,
+        subscription_dict_factory,
     ):
         with respx.mock(base_url=BASE_URL) as mock:
             self_route = mock.get(self_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
             async with make_client() as client:
-                await client.list_subscriptions(as_provider_for_user_id=None)
+                await client.list_subscriptions(
+                    as_provider_for_user_id=None,
+                )
+
         assert self_route.called
 
-    async def test_as_provider_for_user_id_set_uses_provider_path(self, subscription_dict_factory):
+    async def test_as_provider_for_user_id_set_uses_provider_path(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             provider_route = mock.get(provider_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
             async with make_client() as client:
-                await client.list_subscriptions(as_provider_for_user_id=USER_ID)
+                await client.list_subscriptions(
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert provider_route.called
 
     async def test_as_provider_for_user_id_is_keyword_only(self):
         """
         Passing it positionally must raise a TypeError -- this is the whole
         point of making it keyword-only, so a developer can't accidentally
-        pass a user id into some other positional slot (or vice versa).
+        pass a user id into some other positional slot.
         """
         async with make_client() as client:
             with pytest.raises(TypeError):
-                # get_subscription(self, token, *, as_provider_for_user_id=None)
                 await client.get_subscription(TOKEN, USER_ID)  # type: ignore[misc]
 
-    async def test_different_user_ids_produce_different_paths(self, subscription_dict_factory):
+    async def test_different_user_ids_produce_different_paths(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             route_a = mock.get(provider_prefix(111)).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
             route_b = mock.get(provider_prefix(222)).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
+
             async with make_client() as client:
-                await client.list_subscriptions(as_provider_for_user_id=111)
-                await client.list_subscriptions(as_provider_for_user_id=222)
+                await client.list_subscriptions(
+                    as_provider_for_user_id=111,
+                )
+                await client.list_subscriptions(
+                    as_provider_for_user_id=222,
+                )
+
         assert route_a.called
         assert route_b.called
         assert route_a.call_count == 1
@@ -107,31 +168,47 @@ class TestProviderPathRouting:
 
 
 class TestProviderCreateSubscription:
-    async def test_creates_for_target_user_not_provider_account(self, subscription_dict_factory):
+    async def test_creates_for_target_user_not_provider_account(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(provider_prefix()).mock(
                 return_value=httpx.Response(
-                    201, json=subscription_dict_factory(name="customer-vpn")
+                    201,
+                    json=subscription_dict_factory(name="customer-vpn"),
                 )
             )
+
             async with make_client() as client:
                 sub = await client.create_subscription(
-                    "customer-vpn", as_provider_for_user_id=USER_ID
+                    "customer-vpn",
+                    as_provider_for_user_id=USER_ID,
                 )
 
         assert isinstance(sub, Subscription)
         payload = json.loads(route.calls.last.request.content)
         assert payload["name"] == "customer-vpn"
 
-    async def test_sources_reach_provider_endpoint(self, subscription_dict_factory):
+    async def test_sources_reach_provider_endpoint(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(provider_prefix()).mock(
-                return_value=httpx.Response(201, json=subscription_dict_factory())
+                return_value=httpx.Response(
+                    201,
+                    json=subscription_dict_factory(),
+                )
             )
+
             async with make_client() as client:
                 await client.create_subscription(
-                    "vpn", sources=["vless://a"], as_provider_for_user_id=USER_ID
+                    "vpn",
+                    sources=["vless://a"],
+                    as_provider_for_user_id=USER_ID,
                 )
+
         payload = json.loads(route.calls.last.request.content)
         assert wire_source_data_list(payload["sources"]) == ["vless://a"]
 
@@ -140,37 +217,70 @@ class TestProviderGetSubscription:
     async def test_by_token(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             mock.get(f"{provider_prefix()}/{TOKEN}").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
+
             async with make_client() as client:
-                sub = await client.get_subscription(TOKEN, as_provider_for_user_id=USER_ID)
+                sub = await client.get_subscription(
+                    TOKEN,
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert sub.token == TOKEN
 
-    async def test_does_not_hit_self_service_path(self, subscription_dict_factory):
+    async def test_does_not_hit_self_service_path(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL, assert_all_called=False) as mock:
             self_route = mock.get(f"{self_prefix()}/{TOKEN}").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
             mock.get(f"{provider_prefix()}/{TOKEN}").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
+
             async with make_client() as client:
-                await client.get_subscription(TOKEN, as_provider_for_user_id=USER_ID)
+                await client.get_subscription(
+                    TOKEN,
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert not self_route.called
 
 
 class TestProviderUpdateSubscription:
-    async def test_patches_provider_path(self, subscription_dict_factory):
+    async def test_patches_provider_path(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.patch(f"{provider_prefix()}/{TOKEN}").mock(
                 return_value=httpx.Response(
-                    200, json=subscription_dict_factory(token=TOKEN, name="renamed")
+                    200,
+                    json=subscription_dict_factory(
+                        token=TOKEN,
+                        name="renamed",
+                    ),
                 )
             )
+
             async with make_client() as client:
                 sub = await client.update_subscription(
-                    TOKEN, name="renamed", as_provider_for_user_id=USER_ID
+                    TOKEN,
+                    name="renamed",
+                    as_provider_for_user_id=USER_ID,
                 )
+
         assert sub.name == "renamed"
         assert route.called
 
@@ -181,8 +291,13 @@ class TestProviderDeleteSubscription:
             route = mock.delete(f"{provider_prefix()}/{TOKEN}").mock(
                 return_value=httpx.Response(204)
             )
+
             async with make_client() as client:
-                result = await client.delete_subscription(TOKEN, as_provider_for_user_id=USER_ID)
+                result = await client.delete_subscription(
+                    TOKEN,
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert result is None
         assert route.called
 
@@ -196,34 +311,57 @@ class TestProviderSourceManagement:
     async def test_add_sources(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"{provider_prefix()}/{TOKEN}/sources").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
+
             async with make_client() as client:
                 sub = await client.add_sources(
-                    TOKEN, ["vless://a"], as_provider_for_user_id=USER_ID
+                    TOKEN,
+                    ["vless://a"],
+                    as_provider_for_user_id=USER_ID,
                 )
+
         assert sub.token == TOKEN
         assert route.called
 
     async def test_replace_sources(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.put(f"{provider_prefix()}/{TOKEN}/sources").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
+
             async with make_client() as client:
                 sub = await client.replace_sources(
-                    TOKEN, ["vless://only"], as_provider_for_user_id=USER_ID
+                    TOKEN,
+                    ["vless://only"],
+                    as_provider_for_user_id=USER_ID,
                 )
+
         assert sub.token == TOKEN
         assert route.called
 
     async def test_remove_sources(self, subscription_dict_factory):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.delete(f"{provider_prefix()}/{TOKEN}/sources").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
+
             async with make_client() as client:
-                await client.remove_sources(TOKEN, ["id1"], as_provider_for_user_id=USER_ID)
+                await client.remove_sources(
+                    TOKEN,
+                    ["id1"],
+                    as_provider_for_user_id=USER_ID,
+                )
+
         payload = json.loads(route.calls.last.request.content)
         assert payload == {"source_ids": ["id1"]}
 
@@ -232,20 +370,35 @@ class TestProviderSourceManagement:
             route = mock.patch(f"{provider_prefix()}/{TOKEN}/config").mock(
                 return_value=httpx.Response(204)
             )
+
             async with make_client() as client:
                 await client.update_source(
-                    TOKEN, "cfg1", is_hidden=True, as_provider_for_user_id=USER_ID
+                    TOKEN,
+                    "cfg1",
+                    is_hidden=True,
+                    as_provider_for_user_id=USER_ID,
                 )
+
         payload = json.loads(route.calls.last.request.content)
-        assert payload == {"config_id": "cfg1", "is_hidden": True}
+        assert payload == {
+            "config_id": "cfg1",
+            "is_hidden": True,
+        }
 
     async def test_update_comment_deprecated_still_routes_to_provider_path(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.patch(f"{provider_prefix()}/{TOKEN}/comments").mock(
                 return_value=httpx.Response(204)
             )
+
             async with make_client() as client:
-                await client.update_comment(TOKEN, "cfg1", "hi", as_provider_for_user_id=USER_ID)
+                await client.update_comment(
+                    TOKEN,
+                    "cfg1",
+                    "hi",
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert route.called
 
 
@@ -259,11 +412,22 @@ class TestProviderRefreshSubscription:
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"{provider_prefix()}/{TOKEN}/refresh").mock(
                 return_value=httpx.Response(
-                    200, json={"refreshed": 1, "failed": 0, "skipped": 0, "total": 1}
+                    200,
+                    json={
+                        "refreshed": 1,
+                        "failed": 0,
+                        "skipped": 0,
+                        "total": 1,
+                    },
                 )
             )
+
             async with make_client() as client:
-                result = await client.refresh_subscription(TOKEN, as_provider_for_user_id=USER_ID)
+                result = await client.refresh_subscription(
+                    TOKEN,
+                    as_provider_for_user_id=USER_ID,
+                )
+
         assert result.refreshed == 1
         assert route.called
 
@@ -275,28 +439,41 @@ class TestProviderRefreshSubscription:
 
 class TestProviderMultiUserSingleClient:
     async def test_same_client_serves_self_service_and_multiple_providers(
-        self, subscription_dict_factory
+        self,
+        subscription_dict_factory,
     ):
         """
         A single client/connection must be able to freely mix self-service
-        calls and provider calls for different end-users, call by call,
-        without any extra setup per user.
+        calls and provider calls for different end-users, call by call.
         """
         with respx.mock(base_url=BASE_URL) as mock:
             self_route = mock.get(self_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory(token="self1")])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory(token="self1")],
+                )
             )
             user_a_route = mock.get(provider_prefix(111)).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory(token="a1")])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory(token="a1")],
+                )
             )
             user_b_route = mock.get(provider_prefix(222)).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory(token="b1")])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory(token="b1")],
+                )
             )
 
             async with make_client() as client:
                 own = await client.list_subscriptions()
-                a = await client.list_subscriptions(as_provider_for_user_id=111)
-                b = await client.list_subscriptions(as_provider_for_user_id=222)
+                a = await client.list_subscriptions(
+                    as_provider_for_user_id=111,
+                )
+                b = await client.list_subscriptions(
+                    as_provider_for_user_id=222,
+                )
 
         assert [s.token for s in own] == ["self1"]
         assert [s.token for s in a] == ["a1"]
@@ -305,18 +482,34 @@ class TestProviderMultiUserSingleClient:
         assert user_a_route.call_count == 1
         assert user_b_route.call_count == 1
 
-    async def test_create_then_add_sources_for_same_target_user(self, subscription_dict_factory):
+    async def test_create_then_add_sources_for_same_target_user(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             create_route = mock.post(provider_prefix()).mock(
-                return_value=httpx.Response(201, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    201,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
             add_route = mock.post(f"{provider_prefix()}/{TOKEN}/sources").mock(
-                return_value=httpx.Response(200, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    200,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
             )
 
             async with make_client() as client:
-                sub = await client.create_subscription("vpn", as_provider_for_user_id=USER_ID)
-                await client.add_sources(sub.token, ["vless://a"], as_provider_for_user_id=USER_ID)
+                sub = await client.create_subscription(
+                    "vpn",
+                    as_provider_for_user_id=USER_ID,
+                )
+                await client.add_sources(
+                    sub.token,
+                    ["vless://a"],
+                    as_provider_for_user_id=USER_ID,
+                )
 
         assert create_route.called
         assert add_route.called
@@ -331,12 +524,19 @@ class TestProviderClientSideValidation:
     async def test_add_sources_empty_list_raises_before_request(self):
         async with make_client() as client:
             with pytest.raises(ValidationError):
-                await client.add_sources(TOKEN, [], as_provider_for_user_id=USER_ID)
+                await client.add_sources(
+                    TOKEN,
+                    [],
+                    as_provider_for_user_id=USER_ID,
+                )
 
     async def test_update_subscription_neither_field_raises_before_request(self):
         async with make_client() as client:
             with pytest.raises(ValidationError):
-                await client.update_subscription(TOKEN, as_provider_for_user_id=USER_ID)
+                await client.update_subscription(
+                    TOKEN,
+                    as_provider_for_user_id=USER_ID,
+                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -345,13 +545,37 @@ class TestProviderClientSideValidation:
 
 
 class TestGetProviderConnection:
-    async def test_returns_status(self):
+    async def test_returns_pending_status(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.get(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(200, json={"user_id": USER_ID, "status": "approved"})
+                return_value=httpx.Response(
+                    200,
+                    json=provider_connection_response(USER_ID),
+                )
             )
+
             async with make_client() as client:
                 conn = await client.get_provider_connection(USER_ID)
+
+        assert conn.user_id == USER_ID
+        assert conn.status == "pending"
+        assert route.called
+
+    async def test_returns_approved_status(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            route = mock.get(f"/api/{__api_version__}/providers/{USER_ID}").mock(
+                return_value=httpx.Response(
+                    200,
+                    json=provider_connection_response(
+                        USER_ID,
+                        status="approved",
+                    ),
+                )
+            )
+
+            async with make_client() as client:
+                conn = await client.get_provider_connection(USER_ID)
+
         assert conn.user_id == USER_ID
         assert conn.status == "approved"
         assert route.called
@@ -359,47 +583,60 @@ class TestGetProviderConnection:
     async def test_not_found_raises(self):
         with respx.mock(base_url=BASE_URL) as mock:
             mock.get(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(404, json={"message": "not found"})
+                return_value=httpx.Response(
+                    404,
+                    json={"message": "not found"},
+                )
             )
+
             async with make_client() as client:
                 with pytest.raises(NotFoundError):
                     await client.get_provider_connection(USER_ID)
 
 
 class TestCreateProviderConnection:
-    async def test_posts_to_provider_path(self):
+    async def test_posts_to_provider_path_and_returns_pending(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(201, json={"user_id": USER_ID, "status": "approved"})
-            )
-            async with make_client() as client:
-                conn = await client.create_provider_connection(USER_ID)
-        assert conn.status == "approved"
-        assert route.called
-
-    async def test_quota_exceeded_raises(self):
-        with respx.mock(base_url=BASE_URL) as mock:
-            mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
                 return_value=httpx.Response(
-                    403, json={"error": "too_many_approved_users", "message": "quota reached"}
+                    201,
+                    json=provider_connection_create_response(USER_ID),
                 )
             )
+
             async with make_client() as client:
-                with pytest.raises(Exception) as exc_info:
-                    await client.create_provider_connection(USER_ID)
-        assert "quota" in str(exc_info.value)
+                conn = await client.create_provider_connection(USER_ID)
+
+        assert conn.user_id == USER_ID
+        assert conn.status == "pending"
+        assert conn.connection_link is not None
+        assert route.called
 
     async def test_different_user_ids_hit_different_paths(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route_a = mock.post(f"/api/{__api_version__}/providers/111").mock(
-                return_value=httpx.Response(201, json={"user_id": 111, "status": "approved"})
+                return_value=httpx.Response(
+                    201,
+                    json=provider_connection_create_response(111),
+                )
             )
             route_b = mock.post(f"/api/{__api_version__}/providers/222").mock(
-                return_value=httpx.Response(201, json={"user_id": 222, "status": "approved"})
+                return_value=httpx.Response(
+                    201,
+                    json=provider_connection_create_response(222),
+                )
             )
+
             async with make_client() as client:
-                await client.create_provider_connection(111)
-                await client.create_provider_connection(222)
+                conn_a = await client.create_provider_connection(111)
+                conn_b = await client.create_provider_connection(222)
+
+        assert conn_a.user_id == 111
+        assert conn_b.user_id == 222
+        assert conn_a.status == "pending"
+        assert conn_b.status == "pending"
+        assert conn_a.connection_link is not None
+        assert conn_b.connection_link is not None
         assert route_a.called
         assert route_b.called
 
@@ -408,18 +645,31 @@ class TestRevokeProviderConnection:
     async def test_posts_to_revoke_path(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}/revoke").mock(
-                return_value=httpx.Response(200, json={"user_id": USER_ID, "status": "revoked"})
+                return_value=httpx.Response(
+                    200,
+                    json=provider_connection_response(
+                        USER_ID,
+                        status="revoked",
+                    ),
+                )
             )
+
             async with make_client() as client:
                 conn = await client.revoke_provider_connection(USER_ID)
+
+        assert conn.user_id == USER_ID
         assert conn.status == "revoked"
         assert route.called
 
     async def test_no_existing_authorization_raises(self):
         with respx.mock(base_url=BASE_URL) as mock:
             mock.post(f"/api/{__api_version__}/providers/{USER_ID}/revoke").mock(
-                return_value=httpx.Response(401, json={"message": "Authorization not found"})
+                return_value=httpx.Response(
+                    401,
+                    json={"message": "Authorization not found"},
+                )
             )
+
             async with make_client() as client:
                 with pytest.raises(AuthenticationError):
                     await client.revoke_provider_connection(USER_ID)
@@ -429,10 +679,15 @@ class TestDeleteProviderConnection:
     async def test_calls_delete_on_provider_path(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.delete(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(200, json={"detail": "Provider connection deleted"})
+                return_value=httpx.Response(
+                    200,
+                    json={"detail": "Provider connection deleted"},
+                )
             )
+
             async with make_client() as client:
                 result = await client.delete_provider_connection(USER_ID)
+
         assert result.detail == "Provider connection deleted"
         assert route.called
 
@@ -440,38 +695,67 @@ class TestDeleteProviderConnection:
         """Deleting a connection must hit /providers/{id}, never /providers/{id}/subs."""
         with respx.mock(base_url=BASE_URL, assert_all_called=False) as mock:
             conn_route = mock.delete(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(200, json={"detail": "Provider connection deleted"})
+                return_value=httpx.Response(
+                    200,
+                    json={"detail": "Provider connection deleted"},
+                )
             )
             subs_route = mock.delete(provider_prefix()).mock(return_value=httpx.Response(204))
+
             async with make_client() as client:
                 await client.delete_provider_connection(USER_ID)
+
         assert conn_route.called
         assert not subs_route.called
 
 
 class TestProviderConnectionFlowIntegration:
-    async def test_create_connection_then_manage_subscription(self, subscription_dict_factory):
+    async def test_create_connection_returns_pending_and_does_not_imply_access(self):
         """
-        The natural end-to-end flow: establish the connection first, then
-        use as_provider_for_user_id for subscription calls. This test only
-        checks that both kinds of calls compose correctly on one client --
-        it does not simulate server-side authorization enforcement.
+        Creating a provider connection now creates a PENDING authorization.
+        The client must not treat the response as an approved connection.
         """
         with respx.mock(base_url=BASE_URL) as mock:
             connect_route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(201, json={"user_id": USER_ID, "status": "approved"})
-            )
-            create_sub_route = mock.post(provider_prefix()).mock(
-                return_value=httpx.Response(201, json=subscription_dict_factory(token=TOKEN))
+                return_value=httpx.Response(
+                    201,
+                    json=provider_connection_create_response(USER_ID),
+                )
             )
 
             async with make_client() as client:
                 conn = await client.create_provider_connection(USER_ID)
-                assert conn.status == "approved"
-                sub = await client.create_subscription("vpn", as_provider_for_user_id=USER_ID)
+
+        assert conn.user_id == USER_ID
+        assert conn.status == "pending"
+        assert conn.connection_link is not None
+        assert connect_route.called
+
+    async def test_approved_connection_can_then_manage_subscription(
+        self,
+        subscription_dict_factory,
+    ):
+        """
+        Provider subscription operations are tested independently with an
+        already-approved connection. This keeps the test focused on the
+        client routing contract rather than assuming that creating a new
+        connection grants access immediately.
+        """
+        with respx.mock(base_url=BASE_URL) as mock:
+            create_sub_route = mock.post(provider_prefix()).mock(
+                return_value=httpx.Response(
+                    201,
+                    json=subscription_dict_factory(token=TOKEN),
+                )
+            )
+
+            async with make_client() as client:
+                sub = await client.create_subscription(
+                    "vpn",
+                    as_provider_for_user_id=USER_ID,
+                )
 
         assert sub.token == TOKEN
-        assert connect_route.called
         assert create_sub_route.called
 
 
@@ -482,57 +766,73 @@ class TestProviderConnectionFlowIntegration:
 # The provider "context" is not a separate client type or a separate
 # constructor argument -- it's just the value of `api_token`, exactly like
 # a regular user token. The client doesn't parse or validate the token;
-# the server decides what it's authorized for. These tests pin down that
-# whatever token the client is constructed with is what actually goes out
-# on the wire, for both self-service and provider-mode calls, and that
-# nothing about token handling changes when as_provider_for_user_id is used.
+# the server decides what it's authorized for.
 
 
 class TestProviderAuthentication:
-    async def test_provider_token_sent_as_api_token_header(self, subscription_dict_factory):
+    async def test_provider_token_sent_as_api_token_header(
+        self,
+        subscription_dict_factory,
+    ):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.get(provider_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
+
             async with make_client(api_token=PROVIDER_TOKEN) as client:
                 await client.list_subscriptions(as_provider_for_user_id=USER_ID)
+
         sent_headers = route.calls.last.request.headers
         assert sent_headers["API-Token"] == PROVIDER_TOKEN
 
     async def test_regular_user_token_unaffected_by_provider_support(
-        self, subscription_dict_factory
+        self,
+        subscription_dict_factory,
     ):
         """
         A plain user token, used without as_provider_for_user_id, must
-        send exactly the same header it always did -- provider support
-        must not change self-service auth in any way.
+        send exactly the same header it always did.
         """
         user_token = "plain-user-token"
+
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.get(self_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
+
             async with make_client(api_token=user_token) as client:
                 await client.list_subscriptions()
+
         sent_headers = route.calls.last.request.headers
         assert sent_headers["API-Token"] == user_token
 
     async def test_same_client_token_used_for_both_self_service_and_provider_calls(
-        self, subscription_dict_factory
+        self,
+        subscription_dict_factory,
     ):
         """
-        One client/one token can freely mix self-service and provider
-        calls -- the client sends the same configured token either way,
-        it's the presence of as_provider_for_user_id (and the resulting
-        path) that changes, never the credential.
+        One client/one token can freely mix self-service and provider calls.
         """
         with respx.mock(base_url=BASE_URL) as mock:
             self_route = mock.get(self_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
             provider_route = mock.get(provider_prefix()).mock(
-                return_value=httpx.Response(200, json=[subscription_dict_factory()])
+                return_value=httpx.Response(
+                    200,
+                    json=[subscription_dict_factory()],
+                )
             )
+
             async with make_client(api_token=PROVIDER_TOKEN) as client:
                 await client.list_subscriptions()
                 await client.list_subscriptions(as_provider_for_user_id=USER_ID)
@@ -542,30 +842,37 @@ class TestProviderAuthentication:
 
     async def test_provider_connection_calls_also_send_provider_token(self):
         """
-        Connection-management calls (get/create/revoke/delete) are a
-        provider-only surface -- they must carry the same api_token as
-        every other call on this client, with no separate credential path.
+        Provider connection management calls must carry the configured
+        provider token.
         """
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(201, json={"user_id": USER_ID, "status": "approved"})
+                return_value=httpx.Response(
+                    201,
+                    json=provider_connection_create_response(USER_ID),
+                )
             )
+
             async with make_client(api_token=PROVIDER_TOKEN) as client:
                 await client.create_provider_connection(USER_ID)
+
         assert route.calls.last.request.headers["API-Token"] == PROVIDER_TOKEN
 
-    async def test_invalid_token_yields_authentication_error_regardless_of_mode(self):
+    async def test_invalid_token_yields_authentication_error_regardless_of_mode(
+        self,
+    ):
         """
-        The client applies no client-side notion of "this is a provider
-        token" or "this is a user token" -- an invalid/rejected token
-        fails the same way (AuthenticationError) whether or not
-        as_provider_for_user_id is set, because the server is the only
-        thing that ever validates the token.
+        The client applies no client-side notion of "provider token".
+        The server is responsible for token validation.
         """
         with respx.mock(base_url=BASE_URL) as mock:
             mock.get(provider_prefix()).mock(
-                return_value=httpx.Response(401, json={"message": "invalid token"})
+                return_value=httpx.Response(
+                    401,
+                    json={"message": "invalid token"},
+                )
             )
+
             async with make_client(api_token="not-a-real-token") as client:
                 with pytest.raises(AuthenticationError):
                     await client.list_subscriptions(as_provider_for_user_id=USER_ID)

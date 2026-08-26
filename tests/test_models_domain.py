@@ -302,18 +302,20 @@ class TestProviderAuthorizationStatus:
         assert ProviderAuthorizationStatus.REVOKED == "revoked"
 
     def test_str_equality_with_plain_string(self):
-        """
-        The enum must compare equal to (and be interchangeable with) plain
-        strings on the wire, regardless of whether it's implemented as
-        StrEnum or `class X(str, Enum)` -- this is what callers actually
-        rely on, not the exact repr.
-        """
         assert ProviderAuthorizationStatus.APPROVED == "approved"
         assert ProviderAuthorizationStatus("approved") is ProviderAuthorizationStatus.APPROVED
 
-    def test_invalid_value_raises(self):
-        with pytest.raises(ValueError):
-            ProviderAuthorizationStatus("pending")
+    def test_pending_value_returns_pending(self):
+        status = ProviderAuthorizationStatus("pending")
+
+        assert status is ProviderAuthorizationStatus.PENDING
+        assert status.value == "pending"
+
+    def test_unknown_value_returns_unknown(self):
+        status = ProviderAuthorizationStatus("future_status")
+
+        assert status is ProviderAuthorizationStatus.UNKNOWN
+        assert status.value == "unknown"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -358,10 +360,6 @@ class TestProviderConnectionResponse:
         """Wire responses deliver status as a plain JSON string, not an enum instance."""
         resp = ProviderConnectionResponse(user_id=7, status="revoked")
         assert resp.status == ProviderAuthorizationStatus.REVOKED
-
-    def test_invalid_status_rejected(self):
-        with pytest.raises(PydanticValidationError):
-            ProviderConnectionResponse(user_id=7, status="pending")
 
     def test_serializes_status_as_plain_string(self):
         """

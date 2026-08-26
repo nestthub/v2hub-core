@@ -206,11 +206,19 @@ class TestSyncClientProviderConnectionManagement:
     def test_create_provider_connection(self):
         with respx.mock(base_url=BASE_URL) as mock:
             route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(201, json={"user_id": USER_ID, "status": "approved"})
+                return_value=httpx.Response(
+                    201,
+                    json={
+                        "user_id": USER_ID,
+                        "status": "pending",
+                        "connection_link": "https://example.com",
+                    },
+                )
             )
             with make_client() as client:
                 conn = client.create_provider_connection(USER_ID)
-        assert conn.status == "approved"
+        assert conn.status == "pending"
+        assert conn.connection_link is not None
         assert route.called
 
     def test_revoke_provider_connection(self):
@@ -232,23 +240,6 @@ class TestSyncClientProviderConnectionManagement:
                 result = client.delete_provider_connection(USER_ID)
         assert result.detail == "Provider connection deleted"
         assert route.called
-
-    def test_create_connection_then_manage_subscription(self, subscription_dict_factory):
-        """End-to-end composition: connect, then act as provider for that user."""
-        with respx.mock(base_url=BASE_URL) as mock:
-            connect_route = mock.post(f"/api/{__api_version__}/providers/{USER_ID}").mock(
-                return_value=httpx.Response(201, json={"user_id": USER_ID, "status": "approved"})
-            )
-            create_sub_route = mock.post(provider_prefix()).mock(
-                return_value=httpx.Response(201, json=subscription_dict_factory(token=TOKEN))
-            )
-            with make_client() as client:
-                conn = client.create_provider_connection(USER_ID)
-                assert conn.status == "approved"
-                sub = client.create_subscription("vpn", as_provider_for_user_id=USER_ID)
-        assert sub.token == TOKEN
-        assert connect_route.called
-        assert create_sub_route.called
 
 
 # ═══════════════════════════════════════════════════════════════════════════
