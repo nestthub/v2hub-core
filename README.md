@@ -176,10 +176,36 @@ Every subscription and source method below accepts an optional, keyword-only `as
 
 Require a **provider** API token. Establish and manage the authorization link between a provider and an end-user; a prerequisite for any `as_provider_for_user_id=` call above.
 
-- `create_provider_connection(user_id)` - Create or re-approve authorization for an end-user
+- `create_provider_connection(user_id)` - Create or re-approve authorization for an end-user. Returns a `ProviderConnectionCreateResponse`, which additionally includes a `connection_link`
 - `get_provider_connection(user_id)` - Get current authorization status
 - `revoke_provider_connection(user_id)` - Revoke authorization (can be re-approved later)
 - `delete_provider_connection(user_id)` - Permanently delete the authorization record
+
+### User Self-Service (Me)
+
+Operate on the account tied to your own `api_token` — separate from provider-mode subscription methods and from provider connection management above.
+
+- `get_me()` - Get information about the currently authenticated user
+- `list_connections()` - List the current user's provider connections (pending and approved; revoked connections are excluded)
+- `get_connection(provider_name)` - Get the current user's connection status for a provider
+- `approve_connection(provider_name)` - Approve a pending provider connection request (subject to the server-side `MAX_PROVIDERS_PER_USER` limit)
+- `reject_connection(provider_name)` - Reject a pending provider connection request
+- `revoke_connection(provider_name)` - Revoke the current user's provider authorization (existing subscriptions from that provider remain available)
+
+```python
+from v2hub import AsyncVPNClient
+
+async with AsyncVPNClient("https://api.example.com", "your-api-token") as client:
+    me = await client.get_me()
+    print(me.user_id, me.is_active)
+
+    connections = await client.list_connections()
+    for conn in connections.connections:
+        print(conn.provider_name, conn.status)
+
+    # Approve a pending request from a provider
+    await client.approve_connection("my-provider")
+```
 
 ### Public Access
 

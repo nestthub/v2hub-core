@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 
     from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
     from v2hub.models import (
+        ConnectionResponse,
+        ConnectionsResponse,
+        MeResponse,
         ProviderConnectionCreateResponse,
         ProviderConnectionDeleteResponse,
         ProviderConnectionResponse,
@@ -27,7 +30,6 @@ if TYPE_CHECKING:
         Subscription,
         SubscriptionListItem,
     )
-    from v2hub.models.me import ConnectionResponse, ConnectionsResponse, MeResponse
 
 __all__ = ["VPNClient"]
 
