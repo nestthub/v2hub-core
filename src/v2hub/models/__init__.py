@@ -8,7 +8,10 @@ from __future__ import annotations
 
 __all__ = [
     "CommentUpdateRequest",
+    "ConnectionResponse",
+    "ConnectionsResponse",
     "ErrorResponse",
+    "MeResponse",
     "ProviderAuthorizationStatus",
     "ProviderConnectionCreateResponse",
     "ProviderConnectionDeleteResponse",
@@ -34,6 +37,7 @@ from .enums import SourceType
 from .errors import (
     ErrorResponse,
 )
+from .me import ConnectionResponse, ConnectionsResponse, MeResponse
 from .providers import (
     ProviderAuthorizationStatus,
     ProviderConnectionCreateResponse,

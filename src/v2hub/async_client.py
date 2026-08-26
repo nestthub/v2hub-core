@@ -19,6 +19,9 @@ from v2hub.core.retry import CircuitBreaker, CircuitBreakerConfig, RetryConfig, 
 from v2hub.http.client import HTTPClient
 from v2hub.models import (
     CommentUpdateRequest,
+    ConnectionResponse,
+    ConnectionsResponse,
+    MeResponse,
     ProviderConnectionCreateResponse,
     ProviderConnectionDeleteResponse,
     ProviderConnectionResponse,
@@ -581,6 +584,149 @@ class AsyncVPNClient:
             f"{self._subs_path(as_provider_for_user_id)}/{token}/refresh"
         )
         return RefreshSubscriptionResponse(**response.json())
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # User Self-Service (Me)
+    # ═══════════════════════════════════════════════════════════════════════
+    #
+    # These methods operate on the account associated with `api_token`.
+    # They are separate from provider-mode subscription methods and from
+    # provider connection management.
+    @with_async_retry()
+    async def get_me(self) -> MeResponse:
+        """
+        Get information about the currently authenticated user.
+
+        Returns:
+            Current user information.
+
+        Raises:
+            AuthenticationError: Invalid API token.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.get(f"/api/{__api_version__}/me")
+        return MeResponse(**response.json())
+
+    @with_async_retry()
+    async def list_connections(self) -> ConnectionsResponse:
+        """
+        List the current user's provider connections.
+
+        Both pending and approved connections are returned.
+        Revoked connections are excluded.
+
+        Returns:
+            Provider connections for the authenticated user.
+
+        Raises:
+            AuthenticationError: Invalid API token.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.get(f"/api/{__api_version__}/me/connections")
+        return ConnectionsResponse(**response.json())
+
+    @with_async_retry()
+    async def get_connection(
+        self,
+        provider_name: str,
+    ) -> ConnectionResponse:
+        """
+        Get the current user's connection status for a provider.
+
+        Args:
+            provider_name: Public provider name.
+
+        Returns:
+            Provider information and current authorization status.
+
+        Raises:
+            AuthenticationError: Invalid API token.
+            NotFoundError: Provider not found.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.get(
+            f"/api/{__api_version__}/me/connections/{provider_name}"
+        )
+        return ConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def approve_connection(
+        self,
+        provider_name: str,
+    ) -> ConnectionResponse:
+        """
+        Approve a pending provider connection request.
+
+        Approval is subject to the server-side
+        `MAX_PROVIDERS_PER_USER` limit.
+
+        Args:
+            provider_name: Public provider name.
+
+        Returns:
+            Approved provider connection.
+
+        Raises:
+            InvalidAuthorizationStatusError: Connection is not pending.
+            TooManyProvidersError: Maximum number of approved providers
+                has been reached.
+            AuthenticationError: Invalid API token.
+            NotFoundError: Provider or authorization not found.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.post(
+            f"/api/{__api_version__}/me/connections/{provider_name}/approve"
+        )
+        return ConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def reject_connection(
+        self,
+        provider_name: str,
+    ) -> ConnectionResponse:
+        """
+        Reject a pending provider connection request.
+
+        If subscriptions already exist for the provider, the server
+        preserves the authorization as REVOKED instead of deleting it.
+
+        Args:
+            provider_name: Public provider name.
+
+        Returns:
+            The resulting connection state.
+
+        Raises:
+            InvalidAuthorizationStatusError: Connection is not pending.
+            AuthenticationError: Invalid API token.
+            NotFoundError: Provider or authorization not found.
+            VPNAPIError: Other API errors.
+        """
+        response = await self._http_client.post(
+            f"/api/{__api_version__}/me/connections/{provider_name}/reject"
+        )
+        return ConnectionResponse(**response.json())
+
+    @with_async_retry()
+    async def revoke_connection(
+        self,
+        provider_name: str,
+    ) -> None:
+        """
+        Revoke the current user's provider authorization.
+
+        The authorization record is preserved as REVOKED so existing
+        provider subscriptions remain available.
+
+        Args:
+            provider_name: Public provider name.
+
+        Raises:
+            AuthenticationError: Invalid API token.
+            NotFoundError: Provider or authorization not found.
+            VPNAPIError: Other API errors.
+        """
+        await self._http_client.delete(f"/api/{__api_version__}/me/connections/{provider_name}")
 
     # ═══════════════════════════════════════════════════════════════════════
     # Provider Connection Management
