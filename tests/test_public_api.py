@@ -63,6 +63,11 @@ EXPECTED_EXPORTS = {
     "RetryConfig",
     "CircuitBreakerConfig",
     "CircuitState",
+    # Me
+    "MeResponse",
+    "ConnectionResponse",
+    "ConnectionsResponse",
+    "ProviderConnectionCreateResponse",
 }
 
 
@@ -81,6 +86,34 @@ class TestPublicAPISurface:
     def test_api_version_is_v1(self):
         # Bumping this changes every endpoint URL the clients call.
         assert v2hub.__api_version__ == "v1"
+
+    def test_version_falls_back_to_unknown_when_package_not_installed(self, monkeypatch):
+        """
+        If the package metadata can't be found (e.g. running from a source
+        checkout without an installed distribution), __version__ and
+        __author__ must fall back to "unknown" rather than raising.
+        """
+        import importlib
+        import sys
+        from importlib.metadata import PackageNotFoundError
+
+        def fake_version(_name):
+            raise PackageNotFoundError
+
+        def fake_metadata(_name):
+            raise PackageNotFoundError
+
+        monkeypatch.setattr("importlib.metadata.version", fake_version)
+        monkeypatch.setattr("importlib.metadata.metadata", fake_metadata)
+
+        sys.modules.pop("v2hub", None)
+        try:
+            reloaded = importlib.import_module("v2hub")
+            assert reloaded.__version__ == "unknown"
+            assert reloaded.__author__ == "unknown"
+        finally:
+            sys.modules.pop("v2hub", None)
+            importlib.import_module("v2hub")
 
     def test_async_client_is_the_full_featured_client(self):
         from v2hub.async_client import AsyncVPNClient

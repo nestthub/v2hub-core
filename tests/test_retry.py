@@ -160,6 +160,50 @@ class TestWithAsyncRetry:
         result = await fn(1, 2, c=3)
         assert result == (1, 2, 3)
 
+    async def test_default_config_used_when_none_provided(self):
+        """with_async_retry() with no config falls back to RetryConfig()."""
+
+        @with_async_retry()
+        async def fn():
+            return "ok"
+
+        assert await fn() == "ok"
+
+    async def test_routes_calls_through_circuit_breaker_when_provided(self, monkeypatch):
+        monkeypatch.setattr(asyncio, "sleep", _fast_sleep)
+        breaker = CircuitBreaker(CircuitBreakerConfig(enabled=True, failure_threshold=5))
+        calls = {"n": 0}
+
+        @with_async_retry(RetryConfig(max_retries=1, initial_delay=0), circuit_breaker=breaker)
+        async def fn():
+            calls["n"] += 1
+            return "ok"
+
+        result = await fn()
+        assert result == "ok"
+        assert calls["n"] == 1
+        # Circuit breaker recorded the successful call.
+        assert breaker.failure_count == 0
+
+    async def test_open_circuit_with_no_prior_failure_transitions_to_half_open(self, monkeypatch):
+        """
+        An OPEN circuit with no recorded failure time immediately attempts
+        a reset (_should_attempt_reset returns True), transitions to
+        HALF_OPEN, and the call goes through.
+        """
+        monkeypatch.setattr(asyncio, "sleep", _fast_sleep)
+        breaker = CircuitBreaker(CircuitBreakerConfig(enabled=True, failure_threshold=1))
+        breaker.state = CircuitState.OPEN
+        assert breaker.last_failure_time is None
+
+        @with_async_retry(RetryConfig(max_retries=1, initial_delay=0), circuit_breaker=breaker)
+        async def fn():
+            return "ok"
+
+        result = await fn()
+        assert result == "ok"
+        assert breaker.state == CircuitState.HALF_OPEN
+
 
 async def _fast_sleep(_delay: float) -> None:
     return None
@@ -210,6 +254,33 @@ class TestWithRetry:
         with pytest.raises(ServerError):
             fn()
 
+    def test_default_config_used_when_none_provided(self):
+        """with_retry() with no config falls back to RetryConfig()."""
+
+        @with_retry()
+        def fn():
+            return "ok"
+
+        assert fn() == "ok"
+
+    def test_rate_limit_retry_after_used_as_delay(self, monkeypatch):
+        import time
+
+        recorded_delays = []
+        monkeypatch.setattr(time, "sleep", recorded_delays.append)
+        calls = {"n": 0}
+
+        @with_retry(RetryConfig(max_retries=1, initial_delay=0))
+        def fn():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RateLimitError("slow down", retry_after=5)
+            return "ok"
+
+        result = fn()
+        assert result == "ok"
+        assert recorded_delays == [5]
+
     def test_non_retryable_raised_immediately(self):
         calls = {"n": 0}
 
@@ -232,6 +303,12 @@ class TestCircuitBreaker:
     async def test_starts_closed(self):
         cb = CircuitBreaker(CircuitBreakerConfig())
         assert cb.state == CircuitState.CLOSED
+
+    def test_should_attempt_reset_true_when_never_failed(self):
+        """With no prior failure, reset should always be attempted."""
+        cb = CircuitBreaker(CircuitBreakerConfig())
+        assert cb.last_failure_time is None
+        assert cb._should_attempt_reset() is True
 
     async def test_successful_calls_keep_circuit_closed(self):
         cb = CircuitBreaker(CircuitBreakerConfig(failure_threshold=3))

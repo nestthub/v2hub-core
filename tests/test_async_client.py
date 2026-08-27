@@ -6,7 +6,7 @@ import respx
 
 from v2hub import __api_version__
 from v2hub.async_client import AsyncVPNClient
-from v2hub.core.exceptions import NotFoundError, ValidationError
+from v2hub.core.exceptions import AuthenticationError, NotFoundError, ValidationError, VPNAPIError
 from v2hub.core.retry import CircuitBreakerConfig, RetryConfig
 from v2hub.models import (
     PublicSubscriptionResponse,
@@ -329,6 +329,156 @@ class TestRefreshSubscription:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# User Self-Service (Me) and Connection management
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestGetMe:
+    async def test_returns_current_user(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me").mock(
+                return_value=httpx.Response(200, json={"user_id": 42, "is_active": True})
+            )
+            async with make_client() as client:
+                me = await client.get_me()
+        assert me.user_id == 42
+        assert me.is_active is True
+
+    async def test_authentication_error_propagates(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me").mock(
+                return_value=httpx.Response(401, json={"message": "invalid token"})
+            )
+            async with make_client() as client:
+                with pytest.raises(AuthenticationError):
+                    await client.get_me()
+
+
+class TestListConnections:
+    async def test_returns_connections(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "connections": [
+                            {
+                                "provider_name": "prov1",
+                                "provider_url": "https://prov1.example.com",
+                                "is_authorized": True,
+                                "status": "approved",
+                            }
+                        ]
+                    },
+                )
+            )
+            async with make_client() as client:
+                result = await client.list_connections()
+        assert len(result.connections) == 1
+        assert result.connections[0].provider_name == "prov1"
+        assert result.connections[0].status == "approved"
+
+    async def test_empty_connections(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections").mock(
+                return_value=httpx.Response(200, json={"connections": []})
+            )
+            async with make_client() as client:
+                result = await client.list_connections()
+        assert result.connections == []
+
+
+class TestGetConnection:
+    async def test_returns_connection_for_provider(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections/prov1").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": None,
+                        "is_authorized": False,
+                        "status": "pending",
+                    },
+                )
+            )
+            async with make_client() as client:
+                conn = await client.get_connection("prov1")
+        assert conn.provider_name == "prov1"
+        assert conn.is_authorized is False
+        assert conn.status == "pending"
+
+    async def test_not_found_raises(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections/missing").mock(
+                return_value=httpx.Response(404, json={"message": "not found"})
+            )
+            async with make_client() as client:
+                with pytest.raises(NotFoundError):
+                    await client.get_connection("missing")
+
+
+class TestApproveConnection:
+    async def test_approves_pending_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.post(f"/api/{__api_version__}/me/connections/prov1/approve").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": "https://prov1.example.com",
+                        "is_authorized": True,
+                        "status": "approved",
+                    },
+                )
+            )
+            async with make_client() as client:
+                conn = await client.approve_connection("prov1")
+        assert conn.status == "approved"
+        assert conn.is_authorized is True
+
+
+class TestRejectConnection:
+    async def test_rejects_pending_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.post(f"/api/{__api_version__}/me/connections/prov1/reject").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": None,
+                        "is_authorized": False,
+                        "status": "revoked",
+                    },
+                )
+            )
+            async with make_client() as client:
+                conn = await client.reject_connection("prov1")
+        assert conn.status == "revoked"
+
+
+class TestRevokeConnection:
+    async def test_calls_delete_and_returns_none(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            route = mock.delete(f"/api/{__api_version__}/me/connections/prov1").mock(
+                return_value=httpx.Response(204)
+            )
+            async with make_client() as client:
+                result = await client.revoke_connection("prov1")
+        assert route.called
+        assert result is None
+
+    async def test_not_found_raises(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.delete(f"/api/{__api_version__}/me/connections/missing").mock(
+                return_value=httpx.Response(404, json={"message": "not found"})
+            )
+            async with make_client() as client:
+                with pytest.raises(NotFoundError):
+                    await client.revoke_connection("missing")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Public endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -391,6 +541,19 @@ class TestGetPublicSubscription:
                 with pytest.raises(NotFoundError) as exc_info:
                     await client.get_public_subscription("missing")
         assert exc_info.value.status_code == 404
+
+    async def test_non_error_but_non_200_status_hits_manual_check(self):
+        """
+        A 2xx-but-not-200 status (e.g. 204) doesn't trigger
+        HTTPClient's `>= 400` error handling, so it reaches the manual
+        `if response.status_code != 200` branch inside
+        get_public_subscription() and raises a bare VPNAPIError.
+        """
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/sub/{TOKEN}").mock(return_value=httpx.Response(204, text=""))
+            async with make_client() as client:
+                with pytest.raises(VPNAPIError):
+                    await client.get_public_subscription(TOKEN)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

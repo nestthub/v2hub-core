@@ -5,12 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.1.2] - Unreleased
+## [Unreleased]
+
+### Changed
+
+- Expanded the test suite across HTTP middleware/client, retry logic, request
+  models, sync/async clients, and public API.
+- Added coverage for previously untested middleware, retry, request normalization,
+  error-handling, metadata fallback, and "Me / Connections" API paths.
+- The test suite now contains **367 tests**, all passing.
+
+## [1.1.2] - Released
 
 ### Added
 
 - User self-service ("me") API for both `VPNClient` and `AsyncVPNClient`, scoped to the
   account associated with the current `api_token`:
+
   - `get_me()` — get information about the currently authenticated user.
   - `list_connections()` — list the current user's provider connections (pending and
     approved; revoked connections are excluded).
@@ -22,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - `revoke_connection(provider_name)` — revoke the current user's provider authorization
     (the authorization record is preserved as `REVOKED` so existing subscriptions remain
     available).
+
 - New models: `MeResponse`, `ConnectionResponse`, `ConnectionsResponse`
   (`v2hub.models.me`), importable via `v2hub.models`.
 - `ProviderAuthorizationStatus.PENDING` value, plus an `UNKNOWN` fallback member returned
@@ -48,23 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `v2hub.models.me` submodule in a separate statement instead of from the public
   `v2hub.models` package like every other model. Consolidated into a single, alphabetized
   import from `v2hub.models`.
-
-### Known gaps
-
-- `MeResponse`, `ConnectionResponse`, `ConnectionsResponse`, and
-  `ProviderConnectionCreateResponse` are available from `v2hub.models` but are **not**
-  re-exported from the top-level `v2hub` package (unlike most other models). This mirrors
-  the existing (pre-1.1.2) treatment of `ProviderConnectionResponse` and
-  `ProviderAuthorizationStatus`, which are also not top-level exports, and is pinned in
-  place by `tests/test_public_api.py::TestPublicAPISurface::test_all_matches_expected_exports`.
-  If top-level access is desired, `EXPECTED_EXPORTS` in that test needs a deliberate,
-  reviewed update alongside `v2hub/__init__.py`.
-- No unit tests were added for the new "Me" models (`src/v2hub/models/me.py`) or the six
-  new client methods (`get_me`, `list_connections`, `get_connection`,
-  `approve_connection`, `reject_connection`, `revoke_connection`) on either
-  `AsyncVPNClient` or `VPNClient`. Existing suites such as `test_async_client_providers.py`
-  and `test_client_providers.py` cover the equivalent provider-side connection methods and
-  would be a reasonable template.
 
 ## [1.1.1] and earlier
 

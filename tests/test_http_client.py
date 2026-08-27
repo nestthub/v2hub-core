@@ -195,3 +195,32 @@ class TestRequestContext:
     def test_custom_metadata(self):
         ctx = RequestContext(method="POST", url="https://x", metadata={"k": "v"})
         assert ctx.metadata == {"k": "v"}
+
+
+class TestBaseMiddleware:
+    async def test_default_call_passes_through_to_call_next(self):
+        """The base Middleware.__call__ is a plain pass-through."""
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get("/thing").mock(return_value=httpx.Response(200, json={"ok": True}))
+            client = HTTPClient(base_url=BASE_URL, middleware=[Middleware()])
+            async with client:
+                resp = await client.get("/thing")
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+
+
+class TestExecuteRequestWithoutConnection:
+    async def test_raises_runtime_error_if_not_connected(self):
+        client = HTTPClient(base_url=BASE_URL)
+        with pytest.raises(RuntimeError, match="not connected"):
+            await client._execute_request("GET", "/thing")
+
+
+class TestGenericHTTPError:
+    async def test_generic_httpx_http_error_wrapped_as_network_error(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get("/thing").mock(side_effect=httpx.ProtocolError("bad protocol"))
+            client = HTTPClient(base_url=BASE_URL)
+            async with client:
+                with pytest.raises(NetworkError):
+                    await client.get("/thing")

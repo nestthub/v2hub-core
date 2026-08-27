@@ -27,6 +27,7 @@ from pydantic import ValidationError as PydanticValidationError
 from v2hub.models import (
     CommentUpdateRequest,
     SourceAddRequest,
+    SourceCreate,
     SourceRemoveRequest,
     SourceReplaceRequest,
     SubscriptionCreateRequest,
@@ -134,6 +135,11 @@ class TestSubscriptionCreateRequest:
             "silently change behavior for all existing callers."
         )
 
+    def test_sources_explicit_none_treated_as_empty(self):
+        """Explicitly passing sources=None must behave like omitting it."""
+        req = SubscriptionCreateRequest(name="x", sources=None)
+        assert not req.sources
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SubscriptionUpdateRequest
@@ -221,6 +227,44 @@ class TestSourceAddRequest:
         assert get_attr_or_key(item, "data") == "vless://a"
         assert get_attr_or_key(item, "is_hidden") is True
         assert get_attr_or_key(item, "max_depth") == 1
+
+    def test_dict_form_dedups_by_data_preserving_first_occurrence(self):
+        """Dict-shaped items are deduped by `data`, same as plain strings."""
+        req = SourceAddRequest(
+            sources=[
+                {"data": "vless://a", "is_hidden": True},
+                {"data": "vless://a", "is_hidden": False},
+                {"data": "vless://b"},
+            ]
+        )
+        assert source_data_list(req.sources) == ["vless://a", "vless://b"]
+        # First occurrence wins.
+        assert get_attr_or_key(req.sources[0], "is_hidden") is True
+
+    def test_dict_form_blank_data_skipped(self):
+        req = SourceAddRequest(sources=[{"data": "   "}, {"data": "vless://a"}])
+        assert source_data_list(req.sources) == ["vless://a"]
+
+    def test_source_create_instance_form_accepted(self):
+        """Passing actual SourceCreate instances (not dicts) is supported."""
+        sc = SourceCreate(data="vless://a", is_hidden=True, max_depth=2)
+        req = SourceAddRequest(sources=[sc])
+        assert source_data_list(req.sources) == ["vless://a"]
+        assert get_attr_or_key(req.sources[0], "is_hidden") is True
+        assert get_attr_or_key(req.sources[0], "max_depth") == 2
+
+    def test_source_create_instances_dedup_by_data(self):
+        sc1 = SourceCreate(data="vless://a", is_hidden=True)
+        sc2 = SourceCreate(data="vless://a", is_hidden=False)
+        req = SourceAddRequest(sources=[sc1, sc2])
+        assert source_data_list(req.sources) == ["vless://a"]
+        # First occurrence wins.
+        assert get_attr_or_key(req.sources[0], "is_hidden") is True
+
+    def test_unsupported_item_type_raises_type_error(self):
+        """Anything that's not str/dict/SourceCreate is rejected."""
+        with pytest.raises(TypeError):
+            SourceAddRequest(sources=[123])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -382,6 +426,10 @@ class TestSourceUpdateRequest:
     def test_config_id_required(self):
         with pytest.raises(PydanticValidationError):
             SourceUpdateRequest()
+
+    def test_config_id_whitespace_only_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            SourceUpdateRequest(config_id="   ")
 
     def test_unset_fields_stay_none_and_are_excluded_on_dump(self):
         """

@@ -172,6 +172,87 @@ class TestSyncClientDelegation:
                 resp = client.get_public_subscription(TOKEN)
         assert resp.get_configs() == ["vless://a"]
 
+    def test_get_me(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me").mock(
+                return_value=httpx.Response(200, json={"user_id": 7, "is_active": True})
+            )
+            with make_client() as client:
+                me = client.get_me()
+        assert me.user_id == 7
+        assert me.is_active is True
+
+    def test_list_connections(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections").mock(
+                return_value=httpx.Response(200, json={"connections": []})
+            )
+            with make_client() as client:
+                result = client.list_connections()
+        assert result.connections == []
+
+    def test_get_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.get(f"/api/{__api_version__}/me/connections/prov1").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": None,
+                        "is_authorized": False,
+                        "status": "pending",
+                    },
+                )
+            )
+            with make_client() as client:
+                conn = client.get_connection("prov1")
+        assert conn.provider_name == "prov1"
+        assert conn.status == "pending"
+
+    def test_approve_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.post(f"/api/{__api_version__}/me/connections/prov1/approve").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": "https://prov1.example.com",
+                        "is_authorized": True,
+                        "status": "approved",
+                    },
+                )
+            )
+            with make_client() as client:
+                conn = client.approve_connection("prov1")
+        assert conn.status == "approved"
+
+    def test_reject_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.post(f"/api/{__api_version__}/me/connections/prov1/reject").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "provider_name": "prov1",
+                        "provider_url": None,
+                        "is_authorized": False,
+                        "status": "revoked",
+                    },
+                )
+            )
+            with make_client() as client:
+                conn = client.reject_connection("prov1")
+        assert conn.status == "revoked"
+
+    def test_revoke_connection(self):
+        with respx.mock(base_url=BASE_URL) as mock:
+            route = mock.delete(f"/api/{__api_version__}/me/connections/prov1").mock(
+                return_value=httpx.Response(204)
+            )
+            with make_client() as client:
+                result = client.revoke_connection("prov1")
+        assert route.called
+        assert result is None
+
 
 class TestSyncClientWithoutContextManager:
     def test_run_without_entering_context_uses_asyncio_run(self, subscription_dict_factory):
