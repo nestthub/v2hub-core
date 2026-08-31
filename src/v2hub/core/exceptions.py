@@ -15,6 +15,7 @@ __all__ = [
     "ConflictError",
     "DuplicateNameError",
     "ExternalFetchError",
+    "InvalidAuthorizationStatusError",
     "InvalidConfigError",
     "InvalidURLError",
     "NestingTooDeepError",
@@ -27,6 +28,7 @@ __all__ = [
     "SubscriptionNotFoundError",
     "TimeoutError",
     "TooManyConfigsError",
+    "TooManyProvidersError",
     "TooManySourcesError",
     "TooManySubscriptionsError",
     "VPNAPIError",
@@ -70,7 +72,13 @@ class VPNAPIError(Exception):
     def is_retryable(self) -> bool:
         return isinstance(
             self,
-            (TimeoutError, ServerError, ServiceUnavailableError, RateLimitError, NetworkError),
+            (
+                TimeoutError,
+                ServerError,
+                ServiceUnavailableError,
+                RateLimitError,
+                NetworkError,
+            ),
         )
 
     @property
@@ -92,10 +100,14 @@ class VPNAPIError(Exception):
             CircularReferenceError: "Remove the dependency cycle and try again",
             NestingTooDeepError: "Reduce nesting depth and retry",
             TooManySubscriptionsError: "Remove some subscriptions or increase the limit",
+            TooManyProvidersError: "Remove some providers or increase the limit",
             TooManyConfigsError: "Remove some configs or increase the limit",
             TooManySourcesError: "Remove some sources or increase the limit",
             ExternalFetchError: "Check external URL, DNS, TLS, and remote server availability",
             CacheError: "Inspect cache backend health and permissions",
+            InvalidAuthorizationStatusError: (
+                "The authorization is in an invalid state for this operation"
+            ),
         }
         return hints.get(type(self), "Contact API support if problem persists")
 
@@ -117,7 +129,7 @@ class NotFoundError(VPNAPIError):
 
 
 class ConflictError(VPNAPIError):
-    """Resource already exists (409)."""
+    """Resource already exists or operation conflicts with current state (409)."""
 
 
 class RateLimitError(VPNAPIError):
@@ -135,7 +147,7 @@ class ServerError(VPNAPIError):
 
 
 class ServiceUnavailableError(VPNAPIError):
-    """Service temporarily unavailable (503)."""
+    """Service temporarily unavailable (502/503)."""
 
 
 class NetworkError(VPNAPIError):
@@ -170,7 +182,7 @@ class SourceNotFoundError(NotFoundError):
         return "Source not found - verify source ID exists in subscription"
 
 
-class InvalidConfigError(VPNAPIError):
+class InvalidConfigError(ValidationError):
     """Invalid configuration format or unsupported structure."""
 
 
@@ -196,6 +208,14 @@ class TooManySourcesError(VPNAPIError):
 
 class TooManySubscriptionsError(VPNAPIError):
     """Exceeded the maximum number of subscriptions allowed."""
+
+
+class TooManyProvidersError(VPNAPIError):
+    """Exceeded the maximum number of providers allowed."""
+
+
+class InvalidAuthorizationStatusError(VPNAPIError):
+    """Authorization has an invalid status for the requested operation."""
 
 
 class ExternalFetchError(VPNAPIError):
@@ -239,8 +259,10 @@ _ERROR_TYPE_MAP: dict[str, type[VPNAPIError]] = {
     "circular_reference": CircularReferenceError,
     "nesting_too_deep": NestingTooDeepError,
     "too_many_subscriptions": TooManySubscriptionsError,
+    "too_many_providers": TooManyProvidersError,
     "too_many_configs": TooManyConfigsError,
     "too_many_sources": TooManySourcesError,
+    "invalid_authorization_status": InvalidAuthorizationStatusError,
     "external_fetch_error": ExternalFetchError,
     "cache_error": CacheError,
     "network_error": NetworkError,
@@ -271,8 +293,10 @@ def _extract_message(response_data: dict[str, Any], fallback: str) -> str:
     errors = data.get("errors")
     if isinstance(errors, list) and errors:
         first = errors[0]
+
         if isinstance(first, str) and first.strip():
             return first.strip()
+
         if isinstance(first, dict):
             for key in ("message", "detail", "error"):
                 value = first.get(key)
@@ -282,14 +306,19 @@ def _extract_message(response_data: dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-def _extract_retry_after(response_data: dict[str, Any]) -> int | None:
+def _extract_retry_after(
+    response_data: dict[str, Any],
+) -> int | None:
     data = _unwrap_response_data(response_data)
 
     value = data.get("retry_after")
+
     if isinstance(value, int) and value >= 0:
         return value
+
     if isinstance(value, str) and value.isdigit():
         return int(value)
+
     return None
 
 
@@ -299,6 +328,7 @@ def _extract_error_type(response_data: dict[str, Any]) -> str:
     for key in ("error", "error_code", "code", "type"):
         value = data.get(key)
         normalized = _normalize_error_key(value)
+
         if normalized:
             return normalized
 
@@ -327,16 +357,31 @@ def get_exception_for_status(
 ) -> VPNAPIError:
     """Map HTTP status code to a typed exception."""
     response_data = response_data or {}
+
     retry_after = _extract_retry_after(response_data)
     message = _extract_message(response_data, message)
 
     error_type = _extract_error_type(response_data)
+
     if error_type in _ERROR_TYPE_MAP:
         exc_cls = _ERROR_TYPE_MAP[error_type]
-        return _build_exception(exc_cls, message, status_code, response_data, retry_after)
+        return _build_exception(
+            exc_cls,
+            message,
+            status_code,
+            response_data,
+            retry_after,
+        )
 
     exc_cls = _STATUS_CODE_MAP.get(status_code, VPNAPIError)
-    return _build_exception(exc_cls, message, status_code, response_data, retry_after)
+
+    return _build_exception(
+        exc_cls,
+        message,
+        status_code,
+        response_data,
+        retry_after,
+    )
 
 
 def get_exception_for_error(
@@ -349,21 +394,41 @@ def get_exception_for_error(
     Useful when backend returns error objects with no HTTP status context.
     """
     response_data = response_data or {}
+
     retry_after = _extract_retry_after(response_data)
     message = _extract_message(response_data, message)
 
     error_type = _extract_error_type(response_data)
+
     if error_type in _ERROR_TYPE_MAP:
         exc_cls = _ERROR_TYPE_MAP[error_type]
-        return _build_exception(exc_cls, message, status_code, response_data, retry_after)
+
+        return _build_exception(
+            exc_cls,
+            message,
+            status_code,
+            response_data,
+            retry_after,
+        )
 
     if status_code is not None:
-        return get_exception_for_status(status_code, message, response_data)
+        return get_exception_for_status(
+            status_code,
+            message,
+            response_data,
+        )
 
-    return VPNAPIError(message=message, response_data=response_data, retry_after=retry_after)
+    return VPNAPIError(
+        message=message,
+        response_data=response_data,
+        retry_after=retry_after,
+    )
 
 
-def get_exception_for_exception(exc: Exception, message: str | None = None) -> VPNAPIError:
+def get_exception_for_exception(
+    exc: Exception,
+    message: str | None = None,
+) -> VPNAPIError:
     """
     Wrap transport/runtime exceptions into client exceptions.
     Useful for requests/httpx/aiohttp errors.
@@ -371,11 +436,19 @@ def get_exception_for_exception(exc: Exception, message: str | None = None) -> V
     text = message or str(exc) or exc.__class__.__name__
 
     timeout_types = ("Timeout",)
-    network_types = ("Connection", "Network", "DNS", "SSLError", "ProxyError")
+    network_types = (
+        "Connection",
+        "Network",
+        "DNS",
+        "SSLError",
+        "ProxyError",
+    )
 
     name = exc.__class__.__name__
+
     if any(part in name for part in timeout_types):
         return TimeoutError(message=text)
+
     if any(part in name for part in network_types):
         return NetworkError(message=text)
 
